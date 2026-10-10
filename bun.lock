@@ -47,6 +47,7 @@
       "devDependencies": {
         "@MoveSmart/config": "workspace:*",
         "@tailwindcss/postcss": "catalog:",
+        "@types/geojson": "^7946.0.16",
         "@types/node": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",

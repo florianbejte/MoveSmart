@@ -1,0 +1,300 @@
+"use client";
+import { useMemo, useState } from "react";
+import {
+	CITY_LAYERS,
+	type CityFeature,
+	type CityFeed,
+	type CityLayerId,
+	EMPTY_CITY,
+	eventStillRelevant,
+	matchesRoutes,
+} from "@/lib/transit/city";
+import { useTransit } from "./use-transit";
+
+export function useCityLayers(now: number) {
+	const [enabled, setEnabled] = useState<CityLayerId[]>(["incidents"]);
+	const url = (id: CityLayerId) =>
+		enabled.includes(id) || id === "incidents" ? `/api/city?layer=${id}` : null;
+	const incidents = useTransit<CityFeed>(url("incidents"), 60000);
+	const roadworks = useTransit<CityFeed>(url("roadworks"), 60000);
+	const restrictions = useTransit<CityFeed>(url("restrictions"), 60000);
+	const congestion = useTransit<CityFeed>(url("congestion"), 60000);
+	const parking = useTransit<CityFeed>(url("parking"), 300000);
+	const signals = useTransit<CityFeed>(url("signals"), 300000);
+	const corridors = useTransit<CityFeed>(url("corridors"), 300000);
+	const feeds = {
+		incidents,
+		roadworks,
+		restrictions,
+		congestion,
+		parking,
+		signals,
+		corridors,
+	};
+	const collection = useMemo(
+		() => ({
+			...EMPTY_CITY,
+			features: [
+				incidents.data,
+				roadworks.data,
+				restrictions.data,
+				congestion.data,
+				parking.data,
+				signals.data,
+				corridors.data,
+			]
+				.flatMap((feed) => feed?.collection.features ?? [])
+				.filter(
+					(f) =>
+						enabled.includes(f.properties.category) &&
+						eventStillRelevant(f.properties, now),
+				),
+		}),
+		[
+			incidents.data,
+			roadworks.data,
+			restrictions.data,
+			congestion.data,
+			parking.data,
+			signals.data,
+			corridors.data,
+			enabled,
+			now,
+		],
+	);
+	return {
+		enabled,
+		feeds,
+		collection,
+		toggle: (id: CityLayerId) =>
+			setEnabled((old) =>
+				old.includes(id) ? old.filter((x) => x !== id) : [...old, id],
+			),
+	};
+}
+type CityState = ReturnType<typeof useCityLayers>;
+const date = (value: number) =>
+	new Intl.DateTimeFormat("en-GB", {
+		timeZone: "Europe/Vilnius",
+		day: "numeric",
+		month: "short",
+		hour: "2-digit",
+		minute: "2-digit",
+	}).format(value);
+export function CityLayers({
+	city,
+	routeNames,
+	now,
+	selected,
+	onClose,
+	open,
+	onOpen,
+}: {
+	city: CityState;
+	routeNames: string[];
+	now: number;
+	selected: CityFeature | null;
+	onClose: () => void;
+	open: boolean;
+	onOpen: (value: boolean) => void;
+}) {
+	const delayedLayers = city.enabled.filter((id) => {
+		const feed = city.feeds[id];
+		return (
+			!!feed.error ||
+			feed.data?.stale ||
+			(feed.data &&
+				!["parking", "signals", "corridors"].includes(id) &&
+				now - feed.data.fetchedAt > 120000)
+		);
+	});
+	const alerts =
+		city.feeds.incidents.data?.collection.features.filter(
+			(f) =>
+				eventStillRelevant(f.properties, now) &&
+				(!routeNames.length || matchesRoutes(f, routeNames)),
+		) ?? [];
+	const incidentFeed = city.feeds.incidents;
+	const incidentDelayed =
+		!!incidentFeed.error ||
+		incidentFeed.data?.stale ||
+		(incidentFeed.data && now - incidentFeed.data.fetchedAt > 120000);
+	const selectedCurrent = selected
+		? city.feeds[selected.properties.category].data?.collection.features.find(
+				(f) => f.properties.id === selected.properties.id,
+			)
+		: null;
+	const p = selectedCurrent?.properties ?? selected?.properties;
+	const selectedFeed = p ? city.feeds[p.category] : null;
+	return (
+		<section className="city-layers" aria-label="City data layers">
+			<button
+				className="city-layers-heading"
+				type="button"
+				aria-expanded={open}
+				onClick={() => onOpen(!open)}
+			>
+				<span>
+					City layers <small>{city.enabled.length} on</small>
+				</span>
+				<span>{open ? "−" : "+"}</span>
+			</button>
+			{delayedLayers.length > 0 && (
+				<p className="city-layer-warning" role="status">
+					{delayedLayers
+						.map((id) => CITY_LAYERS.find((layer) => layer.id === id)?.label)
+						.join(", ")}
+					: updates delayed; map data may be outdated.
+				</p>
+			)}
+			{open && (
+				<div className="city-layer-options">
+					{p && (
+						<article className="city-detail">
+							<button type="button" className="text-button" onClick={onClose}>
+								Close detail ×
+							</button>
+							<span className="eyebrow">
+								{CITY_LAYERS.find((layer) => layer.id === p.category)?.label}
+							</span>
+							<h3>{p.title}</h3>
+							<p>
+								{p.description ||
+									CITY_LAYERS.find((layer) => layer.id === p.category)?.note}
+							</p>
+							<small>
+								{eventStillRelevant(p, now)
+									? p.timing
+									: "Published period ended"}
+								{p.start !== null ? ` · ${date(p.start)}` : ""}
+								{p.end !== null ? ` → ${date(p.end)}` : ""}
+							</small>
+							{p.routes.length > 0 && (
+								<p>Reported routes: {p.routes.join(", ")}</p>
+							)}
+							{(selectedFeed?.error || selectedFeed?.data?.stale) && (
+								<p>Source refresh unavailable; details may be outdated.</p>
+							)}
+							<a href={p.source} target="_blank" rel="noreferrer">
+								View source ↗
+							</a>
+						</article>
+					)}
+					<p className="helper-text">
+						Explore the city’s published transport data. Click a shape or marker
+						for details.
+					</p>
+					{CITY_LAYERS.map((layer) => {
+						const feed = city.feeds[layer.id];
+						const checked = city.enabled.includes(layer.id);
+						const delayed =
+							!!feed.error ||
+							feed.data?.stale ||
+							(feed.data &&
+								!["parking", "signals", "corridors"].includes(layer.id) &&
+								now - feed.data.fetchedAt > 120000);
+						const count = feed.data?.collection.features.filter((f) =>
+							eventStillRelevant(f.properties, now),
+						).length;
+						return (
+							<div key={layer.id} className="city-layer-option">
+								<label>
+									<input
+										type="checkbox"
+										aria-label={layer.label}
+										checked={checked}
+										onChange={() => city.toggle(layer.id)}
+									/>
+									<span
+										className="layer-swatch"
+										style={{ background: layer.color }}
+									/>
+									<strong>{layer.label}</strong>
+									<span>{checked && count !== undefined ? count : ""}</span>
+								</label>
+								{checked && (
+									<>
+										<p>{layer.note}</p>
+										<small role="status">
+											{delayed
+												? `Refresh unavailable${feed.data ? " · saved or partial data" : ""}`
+												: feed.data
+													? `${count === 0 ? "No current records · " : ""}Fetched ${date(feed.data.fetchedAt)}`
+													: "Loading…"}
+										</small>
+										{delayed && (
+											<button
+												type="button"
+												className="text-button"
+												onClick={feed.retry}
+											>
+												Retry {layer.label.toLowerCase()}
+											</button>
+										)}
+									</>
+								)}
+							</div>
+						);
+					})}
+					{city.enabled.includes("parking") && (
+						<p className="helper-text">
+							Parking: yellow · blue · red · green zones.
+						</p>
+					)}
+
+					<a
+						className="city-source"
+						href="https://judu.lt/atviri-duomenys/"
+						target="_blank"
+						rel="noreferrer"
+					>
+						City data: JUDU / Vilnius ↗
+					</a>
+				</div>
+			)}
+			<section className="route-alerts" aria-label="Transit disruption notices">
+				{incidentDelayed ? (
+					<p role="status">Transit alerts may be incomplete or outdated.</p>
+				) : !incidentFeed.data ? (
+					<p>Checking transit alerts…</p>
+				) : alerts.length === 0 ? (
+					<p>
+						{routeNames.length
+							? "No published disruptions for these route numbers."
+							: "No current transit disruptions published."}
+					</p>
+				) : (
+					<>
+						<strong>
+							{routeNames.length
+								? "Alerts for these route numbers"
+								: "Transit alerts"}{" "}
+							· {alerts.length}
+						</strong>
+						{alerts.map((f) => (
+							<article key={f.properties.id}>
+								<b>
+									{f.properties.routes.length
+										? `${f.properties.routes.join(", ")} · `
+										: ""}
+									{f.properties.title}
+								</b>
+								<p>{f.properties.description}</p>
+								<small>
+									{f.properties.timing}
+									{f.properties.end ? ` · until ${date(f.properties.end)}` : ""}
+								</small>
+							</article>
+						))}
+					</>
+				)}
+				{routeNames.length > 0 && alerts.length > 0 && (
+					<small>
+						The source lists route numbers without always distinguishing buses
+						from trolleybuses.
+					</small>
+				)}
+			</section>
+		</section>
+	);
+}

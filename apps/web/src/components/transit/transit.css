@@ -853,3 +853,123 @@
 		transition: none;
 	}
 }
+
+.city-layers {
+	border: 1px solid #dfe7e2;
+	border-radius: 10px;
+	margin: 0 0 18px;
+	overflow: hidden;
+	background: #f8faf7;
+}
+.city-layers-heading {
+	display: flex;
+	justify-content: space-between;
+	width: 100%;
+	padding: 13px;
+	font-weight: 650;
+	text-align: left;
+}
+.city-layers-heading small {
+	font-weight: 400;
+	color: #677d74;
+	margin-left: 8px;
+}
+.city-layer-options {
+	padding: 0 13px 13px;
+}
+.city-layer-option {
+	padding: 10px 0;
+	border-bottom: 1px solid #e0e7e1;
+}
+.city-layer-option label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+}
+.city-layer-option label strong {
+	flex: 1;
+	font-size: 12px;
+	font-weight: 550;
+}
+.city-layer-option input {
+	accent-color: #167568;
+	width: 15px;
+	height: 15px;
+}
+.layer-swatch {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+.city-layer-option p {
+	font-size: 11px;
+	color: #64766e;
+	line-height: 1.5;
+	margin: 6px 0;
+}
+.city-layer-option small,
+.city-detail small,
+.route-alerts small {
+	font-size: 10px;
+	color: #697b73;
+	display: block;
+}
+.city-layer-option .text-button {
+	margin: 6px 0 0;
+	padding: 0;
+	font-size: 11px;
+}
+.city-source {
+	display: inline-block;
+	margin-top: 12px;
+	font-size: 10px;
+	text-decoration: underline;
+}
+.city-detail {
+	border-left: 3px solid #167568;
+	background: white;
+	padding: 12px;
+	margin-top: 12px;
+	overflow-wrap: anywhere;
+}
+.city-detail h3 {
+	font-weight: 650;
+	margin: 6px 0;
+}
+.city-detail p {
+	margin: 8px 0;
+	line-height: 1.5;
+}
+.city-detail a {
+	display: inline-block;
+	margin-top: 10px;
+	text-decoration: underline;
+	font-size: 11px;
+}
+.city-detail .text-button {
+	display: block;
+	margin: 0 0 10px;
+	padding: 0;
+}
+.route-alerts {
+	padding: 10px 13px;
+	border-top: 1px solid #dfe7e2;
+	font-size: 11px;
+	line-height: 1.6;
+}
+.route-alerts article {
+	border-left: 2px solid #b63e43;
+	padding-left: 9px;
+	margin: 10px 0;
+}
+.route-alerts p {
+	margin: 0;
+}
+.city-layer-warning {
+	padding: 0 13px 10px;
+	color: #995129;
+	font-size: 11px;
+	line-height: 1.5;
+}

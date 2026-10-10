@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CityFeature } from "@/lib/transit/city";
 import { distance, freshVehicle } from "@/lib/transit/core";
 import type {
 	LiveFeed,
@@ -27,6 +28,7 @@ import type {
 	TripDetail,
 	Vehicle,
 } from "@/lib/transit/types";
+import { CityLayers, useCityLayers } from "./city-layers";
 import { useTransit } from "./use-transit";
 import "./transit.css";
 
@@ -95,6 +97,9 @@ export default function TransitExplorer() {
 		panelContent.current?.scrollTo({ top: 0 });
 	}, [selection?.id, selection?.type]);
 	const [now, setNow] = useState(Date.now());
+	const city = useCityLayers(now);
+	const [cityOpen, setCityOpen] = useState(false);
+	const [citySelection, setCitySelection] = useState<CityFeature | null>(null);
 	useEffect(() => {
 		const timer = setInterval(() => setNow(Date.now()), 10_000);
 		return () => clearInterval(timer);
@@ -182,6 +187,8 @@ export default function TransitExplorer() {
 		setFocus({ ...position, key: Date.now() });
 	}
 	function selectStop(id: string) {
+		setCityOpen(false);
+		setCitySelection(null);
 		setQuery("");
 		setSelection({ type: "stop", id });
 		setPreviewTrip(null);
@@ -189,6 +196,8 @@ export default function TransitExplorer() {
 		if (stop) focusOn(stop);
 	}
 	function selectVehicle(id: string) {
+		setCityOpen(false);
+		setCitySelection(null);
 		setQuery("");
 		setSelection({ type: "vehicle", id });
 		setPreviewTrip(null);
@@ -369,6 +378,25 @@ export default function TransitExplorer() {
 					</div>
 				)}
 				<div className="panel-content" ref={panelContent}>
+					<CityLayers
+						city={city}
+						now={now}
+						open={cityOpen}
+						onOpen={setCityOpen}
+						selected={citySelection}
+						onClose={() => setCitySelection(null)}
+						routeNames={
+							selectedVehicle
+								? [selectedVehicle.route]
+								: selectedStop
+									? selectedStop.routeIds.map(
+											(id) => routeById.get(id)?.name ?? "",
+										)
+									: routeId
+										? [routeById.get(routeId)?.name ?? ""]
+										: []
+						}
+					/>
 					{selection && (
 						<button
 							className="back-button"
@@ -723,6 +751,12 @@ export default function TransitExplorer() {
 			</aside>
 			<section className="map-panel" aria-label="Map and live vehicles">
 				<TransitMap
+					city={city.collection}
+					onCity={(feature) => {
+						setCitySelection(feature);
+						setCityOpen(true);
+						panelContent.current?.scrollTo({ top: 0 });
+					}}
 					stale={feedStale}
 					now={now}
 					vehicles={

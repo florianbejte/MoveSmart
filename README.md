@@ -167,3 +167,32 @@ MoveSmart/
 - `bun run dev:setup`: Setup and configure your Convex project
 - `bun run check-types`: Check TypeScript types across all apps
 - `bun run check`: Run Biome formatting and linting
+
+### City data layers
+
+Open **City layers** in the sidebar to toggle transit disruptions, roadworks,
+restrictions, congestion/road load, parking zones, traffic-light locations, and
+coordinated green corridors. Click map geometry for the published description,
+route numbers, period (Vilnius time), and source link. Transit notices follow the
+selected vehicle, stop, or route filter. Route numbers in the incident source do
+not always distinguish bus and trolleybus services.
+
+`/api/city?layer=incidents|roadworks|restrictions|congestion|parking|signals|corridors`
+proxies an allowlist of city ArcGIS layers. Optional layers fetch only when enabled;
+transit alerts always refresh. Event/load caches refresh every minute; infrastructure
+caches every six hours. Concurrent requests share upstream work. Object-ID batches
+avoid the ArcGIS 1,000-record transfer limit. Failures retain saved geometry with a
+visible stale/partial warning, and public fields are explicitly whitelisted.
+
+Sources:
+- [City dynamic service](https://arcgis.sviesoforai.lt/arcgis/rest/services/VIS/Vilnius_sde_dynamic/MapServer): layers 6–7, 9–10, 12–14, 22–24, 26.
+- [Signal and corridor map](https://portal.sisp.lt/portal/apps/webappviewer/index.html?id=77456a13ed0041a9857cb3f810204111): its published `Sankryžos_ir_koridoriai_(view_only)` FeatureServer layers 1–2.
+
+Hidden, expired, and not-yet-published events are excluded. Planned and recurring
+records are labeled; recurring schedules are not interpreted as continuously active.
+A fetched timestamp is **not** a source measurement timestamp. Road-load units and
+measurement times are absent, so values are shown without inferred percentages or
+live severity labels. Parking gives boundaries, not prices or availability; signals
+and corridors describe infrastructure, not current red/green phases. Undocumented
+GPS vehicle-type and interval codes remain unused. These integrations do not include
+third-party Waze data or establish additional rights beyond the providers' terms.

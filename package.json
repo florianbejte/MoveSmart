@@ -1,63 +1,63 @@
 {
-  "name": "MoveSmart",
-  "private": true,
-  "workspaces": {
-    "packages": [
-      "apps/*",
-      "packages/*"
-    ],
-    "catalog": {
-      "zod": "^4.5.4",
-      "typescript": "^6.0.3",
-      "@types/node": "^26.4.1",
-      "varlock": "1.18.0",
-      "lucide-react": "^1.41.0",
-      "next-themes": "^0.4.6",
-      "react": "^19.2.8",
-      "react-dom": "^19.2.8",
-      "sonner": "^2.0.8",
-      "convex": "^1.45.0",
-      "better-auth": "1.6.17",
-      "@convex-dev/better-auth": "^0.12.5",
-      "@tailwindcss/postcss": "^4.3.3",
-      "@types/react": "^19.2.18",
-      "@types/react-dom": "^19.2.7",
-      "tailwindcss": "^4.3.3"
-    }
-  },
-  "type": "module",
-  "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "check-types": "turbo run check-types",
-    "dev:web": "turbo run dev -F web --",
-    "dev:server": "turbo run dev -F @MoveSmart/backend --",
-    "dev:setup": "turbo run dev:setup -F @MoveSmart/backend --",
-    "env:generate": "varlock codegen --path ./apps/web/",
-    "postinstall": "varlock codegen --path ./apps/web/",
-    "check": "biome check --write .",
-    "prepare": "husky"
-  },
-  "dependencies": {
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@MoveSmart/config": "workspace:*",
-    "@biomejs/biome": "^2.5.12",
-    "@types/node": "catalog:",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.5.0",
-    "turbo": "^2.10.12",
-    "typescript": "catalog:",
-    "varlock": "catalog:"
-  },
-  "overrides": {
-    "@next/env": "npm:@varlock/nextjs-integration@1.2.2"
-  },
-  "lint-staged": {
-    "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}": [
-      "biome check --write ."
-    ]
-  },
-  "packageManager": "bun@1.4.2"
+	"name": "MoveSmart",
+	"private": true,
+	"workspaces": {
+		"packages": [
+			"apps/*",
+			"packages/*"
+		],
+		"catalog": {
+			"zod": "^4.5.4",
+			"typescript": "^6.0.3",
+			"@types/node": "^26.4.1",
+			"varlock": "1.18.0",
+			"lucide-react": "^1.41.0",
+			"next-themes": "^0.4.6",
+			"react": "^19.2.8",
+			"react-dom": "^19.2.8",
+			"sonner": "^2.0.8",
+			"convex": "^1.45.0",
+			"better-auth": "1.6.17",
+			"@convex-dev/better-auth": "^0.12.5",
+			"@tailwindcss/postcss": "^4.3.3",
+			"@types/react": "^19.2.18",
+			"@types/react-dom": "^19.2.7",
+			"tailwindcss": "^4.3.3"
+		}
+	},
+	"type": "module",
+	"scripts": {
+		"dev": "turbo run dev",
+		"build": "turbo run build",
+		"check-types": "turbo run check-types",
+		"dev:web": "turbo run dev -F web --",
+		"dev:server": "turbo run dev -F @MoveSmart/backend --",
+		"dev:setup": "turbo run dev:setup -F @MoveSmart/backend --",
+		"env:generate": "varlock codegen --path ./apps/web/",
+		"postinstall": "varlock codegen --path ./apps/web/",
+		"check": "biome check --write .",
+		"prepare": "husky"
+	},
+	"dependencies": {
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@MoveSmart/config": "workspace:*",
+		"@biomejs/biome": "^2.5.12",
+		"@types/node": "catalog:",
+		"husky": "^9.1.7",
+		"lint-staged": "^17.5.0",
+		"turbo": "^2.10.12",
+		"typescript": "catalog:",
+		"varlock": "catalog:"
+	},
+	"overrides": {
+		"@next/env": "npm:@varlock/nextjs-integration@1.2.2"
+	},
+	"lint-staged": {
+		"*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}": [
+			"biome check --write"
+		]
+	},
+	"packageManager": "bun@1.4.2"
 }

@@ -7,7 +7,11 @@ import type { Position, Stop, TripDetail, Vehicle } from "@/lib/transit/types";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { ENV } from "@/env";
 
+import type { CityCollection, CityFeature } from "@/lib/transit/city";
+
 type Props = {
+	city: CityCollection;
+	onCity: (feature: CityFeature) => void;
 	stale: boolean;
 	now: number;
 	vehicles: Vehicle[];
@@ -94,6 +98,69 @@ export default function TransitMap(props: Props) {
 			if (instance.areTilesLoaded()) setError(null);
 		});
 		instance.on("load", () => {
+			instance.addSource("city", {
+				type: "geojson",
+				data: { type: "FeatureCollection", features: [] },
+				attribution:
+					'© <a href="https://judu.lt/atviri-duomenys/" target="_blank" rel="noopener noreferrer">JUDU / Vilnius</a>',
+			});
+			instance.addLayer({
+				id: "city-fill",
+				type: "fill",
+				source: "city",
+				filter: ["==", ["geometry-type"], "Polygon"],
+				paint: { "fill-color": ["get", "color"], "fill-opacity": 0.18 },
+			});
+			instance.addLayer({
+				id: "city-line",
+				type: "line",
+				source: "city",
+				filter: ["!=", ["geometry-type"], "Point"],
+				paint: {
+					"line-color": ["get", "color"],
+					"line-width": [
+						"case",
+						["==", ["get", "category"], "congestion"],
+						4,
+						2,
+					],
+					"line-opacity": 0.7,
+				},
+			});
+			instance.addLayer({
+				id: "city-point",
+				type: "circle",
+				source: "city",
+				filter: ["==", ["geometry-type"], "Point"],
+				paint: {
+					"circle-color": ["get", "color"],
+					"circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 4, 15, 7],
+					"circle-stroke-color": "#ffffff",
+					"circle-stroke-width": 2,
+				},
+			});
+			instance.on("click", (e) => {
+				if (
+					instance.queryRenderedFeatures(e.point, { layers: ["stops-points"] })
+						.length
+				)
+					return;
+				const hit = instance.queryRenderedFeatures(e.point, {
+					layers: ["city-point", "city-line", "city-fill"],
+				})[0];
+				const feature = handlers.current.city.features.find(
+					(f) => f.properties.id === hit?.properties.id,
+				);
+				if (feature) handlers.current.onCity(feature);
+			});
+			for (const layer of ["city-point", "city-line", "city-fill"]) {
+				instance.on("mouseenter", layer, () => {
+					instance.getCanvas().style.cursor = "pointer";
+				});
+				instance.on("mouseleave", layer, () => {
+					instance.getCanvas().style.cursor = "";
+				});
+			}
 			instance.addSource("route", {
 				type: "geojson",
 				data: { type: "FeatureCollection", features: [] },
@@ -168,6 +235,12 @@ export default function TransitMap(props: Props) {
 			userMarker.current = null;
 		};
 	}, []);
+	useEffect(() => {
+		if (!ready || !map.current) return;
+		(
+			map.current.getSource("city") as maplibregl.GeoJSONSource | undefined
+		)?.setData(props.city);
+	}, [ready, props.city]);
 	useEffect(() => {
 		if (!ready || !map.current) return;
 		const source = map.current.getSource("stops") as maplibregl.GeoJSONSource;
