@@ -102,6 +102,7 @@ type PlanResponse = {
 	transfers?: { legs: [NamedRide, NamedRide] }[];
 	weather: Weather | null;
 	stale: boolean;
+	walkingApproximate?: boolean;
 	generatedAt: number;
 };
 const ICONS: Record<Mode, typeof Bike> = {
@@ -172,6 +173,9 @@ export function TripPlanner({
 	useEffect(() => {
 		if (usingLocation) setStart(origin);
 	}, [usingLocation, origin.lat, origin.lon]);
+	const [travelMode, setTravelMode] = useState("transit");
+	const [showMore, setShowMore] = useState(false);
+	const [maxWalk, setMaxWalk] = useState(20);
 	const [showExcluded, setShowExcluded] = useState(false);
 	const suggestions = useMemo(() => {
 		const needle = fold(query.trim());
@@ -218,7 +222,7 @@ export function TripPlanner({
 	};
 	const plan = useTransit<PlanResponse>(
 		to && !hidden
-			? `/api/plan?from=${from.lat},${from.lon}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}&pace=${walkPace(profile)}`
+			? `/api/plan?from=${from.lat},${from.lon}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}&pace=${walkPace(profile)}&walk=${maxWalk}`
 			: null,
 		60_000,
 	);
@@ -240,6 +244,18 @@ export function TripPlanner({
 		);
 	}, [to, plan.data, profile, start, routes]);
 	const usable = ranked.filter((o) => !o.excluded);
+	const filteredOptions = usable.filter(
+		(o) =>
+			travelMode === "all" ||
+			(travelMode === "cycle"
+				? ["bike", "scooter"].includes(o.mode)
+				: travelMode === "drive"
+					? ["car", "taxi", "carshare"].includes(o.mode)
+					: o.mode === travelMode),
+	);
+	const visibleOptions = showMore
+		? filteredOptions
+		: filteredOptions.slice(0, 3);
 	// Stop names and headsigns from the server, for every bus in every option.
 	const named = new Map<string, NamedRide>();
 	for (const r of [
@@ -361,33 +377,6 @@ export function TripPlanner({
 	}, [selectedKey, hidden]);
 	return (
 		<section className="trip-planner" hidden={hidden} aria-label="Plan a trip">
-			<button
-				type="button"
-				className="profile-chip"
-				onClick={onEditProfile}
-				aria-label="Edit travel profile"
-			>
-				<Sparkles size={15} />
-				<span>
-					Ranked for <strong>{persona(profile)}</strong>
-				</span>
-				<Pencil size={13} />
-			</button>
-			<p className="impact-banner">
-				<Leaf size={15} />
-				{account.impact.trips > 0 ? (
-					<span>
-						You’ve saved <strong>{kg(account.impact.grams)} CO₂</strong> in{" "}
-						{account.impact.trips} green trip
-						{account.impact.trips === 1 ? "" : "s"}
-					</span>
-				) : (
-					<span>
-						Every bus, walk or bike trip instead of a car saves CO₂ — we’ll
-						count yours.
-					</span>
-				)}
-			</p>
 			<div className="plan-points">
 				<div className="plan-point">
 					<span className="point-dot from" />
@@ -440,6 +429,99 @@ export function TripPlanner({
 					)}
 				</div>
 			</div>
+			<details className="journey-settings">
+				<summary>
+					Trip options{" "}
+					<span>
+						Up to {maxWalk} min walking <ChevronDown size={14} />
+					</span>
+				</summary>
+
+				<label className="plan-walk-budget">
+					<span>
+						<Footprints size={16} /> Walk to / from a stop
+					</span>
+					<select
+						aria-label="Maximum walk at each end"
+						value={maxWalk}
+						onChange={(e) => {
+							setMaxWalk(Number(e.target.value));
+							setGoing(null);
+						}}
+					>
+						{[10, 15, 20, 30].map((n) => (
+							<option key={n} value={n}>
+								Up to {n} min each end
+							</option>
+						))}
+					</select>
+				</label>
+				<button
+					type="button"
+					className="profile-chip"
+					onClick={onEditProfile}
+					aria-label="Edit travel profile"
+				>
+					<Sparkles size={15} />
+					<span>
+						Ranked for <strong>{persona(profile)}</strong>
+					</span>
+					<Pencil size={13} />
+				</button>
+				<p className="impact-banner">
+					<Leaf size={15} />
+					{account.impact.trips > 0 ? (
+						<span>
+							You’ve saved <strong>{kg(account.impact.grams)} CO₂</strong> in{" "}
+							{account.impact.trips} green trip
+							{account.impact.trips === 1 ? "" : "s"}
+						</span>
+					) : (
+						<span>
+							Every bus, walk or bike trip instead of a car saves CO₂ — we’ll
+							count yours.
+						</span>
+					)}
+				</p>
+			</details>
+			<fieldset className="journey-modes" aria-label="Travel mode">
+				{[
+					{ id: "transit", label: "Transit", icon: BusFront },
+					{ id: "walk", label: "Walk", icon: Footprints },
+					{ id: "cycle", label: "Cycle", icon: Bike },
+					{ id: "drive", label: "Car", icon: Car },
+					{ id: "all", label: "All", icon: Sparkles },
+				].map(({ id, label, icon: ModeIcon }) => (
+					<button
+						key={id}
+						type="button"
+						aria-pressed={travelMode === id}
+						onClick={() => {
+							setTravelMode(id);
+							setShowMore(false);
+							setGoing(null);
+						}}
+					>
+						<ModeIcon size={17} />
+						{label}
+					</button>
+				))}
+			</fieldset>
+			{to && plan.data?.walkingApproximate && (
+				<p className="helper-text" role="status">
+					Walking directions are unavailable for some stops. Those walking times
+					are approximate.
+				</p>
+			)}
+			{to &&
+				plan.data &&
+				!plan.data.rides.length &&
+				!plan.data.transfers?.length && (
+					<p className="helper-text">
+						No direct or one-change bus journey found within this walking
+						budget. Try allowing a longer walk.
+					</p>
+				)}
 			{!to && places.length > 0 && !query && (
 				<div className="recent-places">
 					<span>Your places</span>
@@ -533,8 +615,22 @@ export function TripPlanner({
 							All options
 						</button>
 					)}
+					{!selected && (
+						<div className="journey-list-heading">
+							<h3>
+								{travelMode === "transit" ? "Suggested journeys" : "Ways to go"}
+							</h3>
+							<span>Leave now</span>
+						</div>
+					)}
+					{!selected && !filteredOptions.length && (
+						<p className="notice">
+							No {travelMode === "all" ? "suitable" : travelMode} journeys
+							found. Try another mode or adjust Trip options.
+						</p>
+					)}
 					<ol className="plan-options">
-						{(selected ? [selected] : usable).map((o, i) => (
+						{(selected ? [selected] : visibleOptions).map((o, i) => (
 							<OptionCard
 								key={o.id}
 								option={o}
@@ -568,6 +664,19 @@ export function TripPlanner({
 							/>
 						))}
 					</ol>
+					{!selected && filteredOptions.length > 3 && (
+						<button
+							type="button"
+							className="journey-more"
+							onClick={() => setShowMore(!showMore)}
+						>
+							{showMore
+								? "Show fewer journeys"
+								: `Show ${filteredOptions.length - 3} more journeys`}
+							<ChevronDown size={16} />
+						</button>
+					)}
+
 					{excluded.length > 0 && !selected && (
 						<div className="plan-excluded">
 							<button
@@ -594,10 +703,15 @@ export function TripPlanner({
 							)}
 						</div>
 					)}
-					<p className="helper-text">
-						Bus times are live where vehicles report them. Driving, taxi and
-						shared-vehicle times and prices are Vilnius estimates.
-					</p>
+					<details className="journey-settings">
+						<summary>About these results</summary>
+						<p className="helper-text">
+							Bus search includes direct journeys and one change. Walks between
+							transfer stops are approximate. Bus times are live where vehicles
+							report them. Driving, taxi and shared-vehicle times and prices are
+							Vilnius estimates.
+						</p>
+					</details>
 				</>
 			)}
 		</section>
@@ -625,13 +739,117 @@ function OptionCard({
 	onGo: () => void;
 	trip: { from: Position; to: Place };
 }) {
+	const [expanded, setExpanded] = useState(false);
 	const Icon = ICONS[o.mode];
 	const ride = legs?.[0];
 	const change = legs && legs.length > 1 ? legs[1] : undefined;
 	const leaveIn = Math.round((o.departAt - now) / 60_000);
 	const top = o.quotes?.find((q) => q.price !== null);
+	if (!expanded && !going)
+		return (
+			<li className="journey-compact">
+				<button
+					type="button"
+					className="journey-summary"
+					aria-expanded={false}
+					onClick={() => setExpanded(true)}
+					aria-label={`View ${o.label}, ${o.minutes} minutes`}
+				>
+					<div className="journey-summary-top">
+						<span>
+							{best
+								? "Suggested"
+								: o.mode === "transit"
+									? change
+										? "1 change"
+										: "Direct"
+									: o.label}
+						</span>
+						<strong>
+							{o.minutes}
+							<small> min</small>
+						</strong>
+					</div>
+					<div className="journey-track">
+						{ride ? (
+							<>
+								<span className="journey-walk">
+									<Footprints size={17} />
+									<small>{ride.walkToMinutes ?? ""}</small>
+								</span>
+								<span className="journey-dots" />
+								{legs?.map((leg, i) => (
+									<Fragment key={`${leg.tripId}-${i}`}>
+										{i > 0 && <span className="journey-dots" />}
+										<span
+											className="journey-line"
+											style={{
+												background: serviceColor(
+													routes.get(leg.routeId)?.name ?? "",
+													routes.get(leg.routeId)?.mode,
+													routes.get(leg.routeId)?.color,
+												),
+											}}
+										>
+											<BusFront size={16} />
+											{routes.get(leg.routeId)?.name}
+										</span>
+									</Fragment>
+								))}
+								<span className="journey-dots" />
+								<Footprints size={17} />
+							</>
+						) : (
+							<>
+								<span className={`journey-mode-icon mode-${o.mode}`}>
+									<Icon size={21} />
+								</span>
+								<strong>{o.label}</strong>
+							</>
+						)}
+					</div>
+					<div className="journey-summary-bottom">
+						<span>
+							{ride ? (
+								<>
+									<strong>
+										{leaveIn <= 0 ? "Leave now" : `Leave in ${leaveIn} min`}
+									</strong>
+									{ride.live && <Radio size={12} />}
+								</>
+							) : (
+								<strong>
+									{o.parts.walk ? `${o.parts.walk} min walk` : "Ready to go"}
+								</strong>
+							)}
+							<small>
+								{ride ? `${o.parts.walk} min walk · ` : ""}
+								{o.cost === 0
+									? "Free"
+									: `€${(top?.price ?? o.cost).toFixed(2)}`}
+							</small>
+						</span>
+						<span className="journey-arrival">
+							{time.format(o.arriveAt)}
+							<ArrowRight size={17} />
+						</span>
+					</div>
+				</button>
+			</li>
+		);
+
 	return (
 		<li className={`plan-option ${best ? "best" : ""} ${going ? "going" : ""}`}>
+			{!going && (
+				<button
+					type="button"
+					className="journey-collapse"
+					aria-expanded={true}
+					onClick={() => setExpanded(false)}
+				>
+					Hide details <ChevronDown size={15} />
+				</button>
+			)}
 			{best && (
 				<span className={`best-tag ${o.green ? "green" : ""}`}>
 					{o.promoted === "greener"

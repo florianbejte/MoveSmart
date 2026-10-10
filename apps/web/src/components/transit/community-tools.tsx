@@ -160,6 +160,7 @@ export function StopReportDialog({
 	const [pending, setPending] = useState(false);
 	const [message, setMessage] = useState("");
 	const [sent, setSent] = useState(false);
+	const [reviewing, setReviewing] = useState(false);
 	useEffect(() => {
 		const el = dialog.current;
 		el?.showModal();
@@ -206,7 +207,11 @@ export function StopReportDialog({
 			</header>
 			<div className="report-body">
 				<h2 id="stop-report-title">
-					{sent ? "Thanks for helping." : "What happened here?"}
+					{sent
+						? "Thanks for helping."
+						: reviewing
+							? "Ready to share?"
+							: "What happened here?"}
 				</h2>
 				<p className="report-intro">
 					{stop.name} · {stop.description}
@@ -215,7 +220,11 @@ export function StopReportDialog({
 					<p role="status">Your report is now shared with other riders.</p>
 				) : (
 					<>
-						<fieldset className="stop-issue-choices" aria-label="Issue type">
+						<fieldset
+							hidden={reviewing}
+							className="stop-issue-choices"
+							aria-label="Issue type"
+						>
 							{STOP_ISSUES.map((item, index) => {
 								const Icon = icons[index];
 								return (
@@ -232,7 +241,28 @@ export function StopReportDialog({
 								);
 							})}
 						</fieldset>
-						{passed && (
+						{reviewing && (
+							<div className="report-review">
+								<strong>
+									{STOP_ISSUES.find((item) => item.id === kind)?.label}
+								</strong>
+								<p>{stop.name}</p>
+								{vehicle && (
+									<p>
+										Route {vehicle.route} · Vehicle {vehicle.number}
+									</p>
+								)}
+								<button
+									type="button"
+									className="text-button"
+									disabled={pending}
+									onClick={() => setReviewing(false)}
+								>
+									Change report
+								</button>
+							</div>
+						)}
+						{passed && !reviewing && (
 							<label className="passed-vehicle">
 								Which bus passed this stop?
 								<select
@@ -280,6 +310,10 @@ export function StopReportDialog({
 							onClose();
 							return;
 						}
+						if (!reviewing) {
+							setReviewing(true);
+							return;
+						}
 						setPending(true);
 						setMessage("");
 						try {
@@ -298,7 +332,13 @@ export function StopReportDialog({
 						}
 					}}
 				>
-					{pending ? "Sending…" : sent ? "Done" : "Send report"}
+					{pending
+						? "Sending…"
+						: sent
+							? "Done"
+							: reviewing
+								? "Send report"
+								: "Review report"}
 					<Check size={18} />
 				</button>
 			</footer>
@@ -385,6 +425,7 @@ export function SavedPanel({
 	onStop,
 	onRoute,
 	onRemove,
+	onExplore,
 }: {
 	saved: Saved;
 	stops: Stop[];
@@ -392,59 +433,72 @@ export function SavedPanel({
 	onStop: (id: string) => void;
 	onRoute: (id: string) => void;
 	onRemove: (type: keyof Saved, id: string) => void;
+	onExplore: () => void;
 }) {
 	return (
 		<section className="saved-panel" aria-label="Favourite stops and routes">
-			<h2>Your daily journeys</h2>
+			<h2>Your shortcuts</h2>
 			<p>Saved on this browser.</p>
 			{!saved.stops.length && !saved.routes.length && (
-				<p>
-					Open a stop or bus and tap the star. You can also save a route from
-					the filters.
-				</p>
-			)}
-			{(["stops", "routes"] as const).map((type) => (
-				<div key={type}>
-					<h3>{type === "stops" ? "Stops" : "Routes"}</h3>
-					{saved[type].map((id) => {
-						const item =
-							type === "stops"
-								? stops.find((s) => s.id === id)
-								: routes.find((r) => r.id === id);
-						return (
-							<div className="saved-item" key={id}>
-								<button
-									type="button"
-									disabled={!item}
-									onClick={() => (type === "stops" ? onStop(id) : onRoute(id))}
-								>
-									{type === "stops" ? (
-										<MapPin size={17} />
-									) : (
-										<BusFront size={17} />
-									)}
-									<span>
-										<strong>
-											{item?.name ?? "Unavailable in current feed"}
-										</strong>
-										<small>
-											{item &&
-												("description" in item ? item.description : item.title)}
-										</small>
-									</span>
-								</button>
-								<button
-									type="button"
-									aria-label={`Remove ${item?.name ?? id} from favourites`}
-									onClick={() => onRemove(type, id)}
-								>
-									<X size={16} />
-								</button>
-							</div>
-						);
-					})}
+				<div className="saved-empty">
+					<Star size={36} />
+					<h3>Keep your everyday stops close</h3>
+					<p>Tap the star on a stop or route to find it here next time.</p>
+					<button type="button" className="report-submit" onClick={onExplore}>
+						Find nearby stops
+					</button>
 				</div>
-			))}
+			)}
+			{(["stops", "routes"] as const)
+				.filter((type) => saved[type].length > 0)
+				.map((type) => (
+					<div key={type}>
+						<h3>
+							{type === "stops" ? "Stops" : "Routes"} · {saved[type].length}
+						</h3>
+						{saved[type].map((id) => {
+							const item =
+								type === "stops"
+									? stops.find((s) => s.id === id)
+									: routes.find((r) => r.id === id);
+							return (
+								<div className="saved-item" key={id}>
+									<button
+										type="button"
+										disabled={!item}
+										onClick={() =>
+											type === "stops" ? onStop(id) : onRoute(id)
+										}
+									>
+										{type === "stops" ? (
+											<MapPin size={17} />
+										) : (
+											<BusFront size={17} />
+										)}
+										<span>
+											<strong>
+												{item?.name ?? "Unavailable in current feed"}
+											</strong>
+											<small>
+												{item &&
+													("description" in item
+														? item.description
+														: item.title)}
+											</small>
+										</span>
+									</button>
+									<button
+										type="button"
+										aria-label={`Remove ${item?.name ?? id} from favourites`}
+										onClick={() => onRemove(type, id)}
+									>
+										<X size={16} />
+									</button>
+								</div>
+							);
+						})}
+					</div>
+				))}
 		</section>
 	);
 }

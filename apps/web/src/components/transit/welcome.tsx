@@ -21,13 +21,11 @@ export function Welcome({ onGuest }: { onGuest: () => void }) {
 			}}
 		>
 			<section>
-				<span className="bubble-tag lime">COMFY</span>{" "}
-				<span className="bubble-tag navy">NEXT</span>
+				<span className="flow-eyebrow">MOVE SMART · VILNIUS</span>
 				<h2 id="welcome-title">Your way around Vilnius.</h2>
 				<p>
-					Tell us how you travel once. Then just say where you’re going — we
-					compare live buses, walking, bikes, scooters and the car, and show the
-					best way for you on the map.
+					Find your next bus, compare ways to get there, and see what’s
+					happening nearby.
 				</p>
 				<ul className="welcome-points">
 					<li>
@@ -40,21 +38,21 @@ export function Welcome({ onGuest }: { onGuest: () => void }) {
 					</li>
 					<li>
 						<UserRound size={16} />
-						Your profile and favourite places follow your account
+						Save your travel preferences for next time
 					</li>
 				</ul>
 			</section>
 			<div className="welcome-actions">
-				<Link className="onboarding-next" href="/dashboard">
-					Create an account
+				<button type="button" className="onboarding-next" onClick={onGuest}>
+					Explore the map
 					<ArrowRight size={16} />
-				</Link>
+				</button>
 				<Link className="welcome-signin" href="/dashboard?mode=signin">
 					I already have an account
 				</Link>
-				<button type="button" className="onboarding-back" onClick={onGuest}>
-					Continue as a guest
-				</button>
+				<Link className="onboarding-back" href="/dashboard">
+					Create an account
+				</Link>
 			</div>
 		</dialog>
 	);

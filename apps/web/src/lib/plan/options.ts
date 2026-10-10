@@ -188,16 +188,19 @@ export function estimateOptions(input: {
 		}),
 	);
 	for (const ride of input.rides) {
-		const walk = walkMin(ride.walkToMetres) + walkMin(ride.walkFromMetres);
+		const walk =
+			(ride.walkToMinutes ?? walkMin(ride.walkToMetres)) +
+			(ride.walkFromMinutes ?? walkMin(ride.walkFromMetres));
 		const wait = Math.max(
 			0,
-			minutes(ride.departAt - now) - walkMin(ride.walkToMetres),
+			minutes(ride.departAt - now) -
+				(ride.walkToMinutes ?? walkMin(ride.walkToMetres)),
 		);
 		const rideMin = minutes(ride.arriveAt - ride.departAt);
 		const total = walk + wait + rideMin;
 		options.push({
 			...option({
-				id: `transit-${ride.tripId}`,
+				id: `transit-${ride.tripId}-${ride.fromStopId}-${ride.toStopId}-${Math.floor(ride.departAt / 86400000)}`,
 				mode: "transit",
 				label: `Route ${input.routeName(ride.routeId)}`,
 				parts: { walk, wait, ride: rideMin, park: 0 },
@@ -214,23 +217,30 @@ export function estimateOptions(input: {
 						]
 					: ["Timetable time"],
 			}),
-			departAt: ride.departAt - walkMin(ride.walkToMetres) * 60_000,
+			departAt:
+				ride.departAt -
+				((ride.walkToMinutes ?? walkMin(ride.walkToMetres)) + 1) * 60_000,
 		});
 	}
 	for (const { legs } of input.transfers ?? []) {
 		const [first, second] = legs;
 		const walk =
-			walkMin(first.walkToMetres) +
-			(second.walkToMetres > 0 ? walkMin(second.walkToMetres) : 0) +
-			walkMin(second.walkFromMetres);
+			(first.walkToMinutes ?? walkMin(first.walkToMetres)) +
+			(second.walkToMetres > 0
+				? (second.walkToMinutes ?? walkMin(second.walkToMetres))
+				: 0) +
+			(second.walkFromMinutes ?? walkMin(second.walkFromMetres));
 		const startWait = Math.max(
 			0,
-			minutes(first.departAt - now) - walkMin(first.walkToMetres),
+			minutes(first.departAt - now) -
+				(first.walkToMinutes ?? walkMin(first.walkToMetres)),
 		);
 		const changeWait = Math.max(
 			0,
 			minutes(second.departAt - first.arriveAt) -
-				(second.walkToMetres > 0 ? walkMin(second.walkToMetres) : 0),
+				(second.walkToMetres > 0
+					? (second.walkToMinutes ?? walkMin(second.walkToMetres))
+					: 0),
 		);
 		const rideMin =
 			minutes(first.arriveAt - first.departAt) +
@@ -239,7 +249,7 @@ export function estimateOptions(input: {
 		const live = legs.find((l) => l.live);
 		options.push({
 			...option({
-				id: `transit-${first.tripId}-${second.tripId}`,
+				id: `transit-${first.tripId}-${second.tripId}-${first.fromStopId}-${second.toStopId}-${Math.floor(first.departAt / 86400000)}`,
 				mode: "transit",
 				label: `Route ${input.routeName(first.routeId)} + ${input.routeName(second.routeId)}`,
 				parts: { walk, wait: startWait + changeWait, ride: rideMin, park: 0 },
@@ -252,27 +262,11 @@ export function estimateOptions(input: {
 					live ? "One change · live times" : "One change · timetable times",
 				],
 			}),
-			departAt: first.departAt - walkMin(first.walkToMetres) * 60_000,
+			departAt:
+				first.departAt -
+				((first.walkToMinutes ?? walkMin(first.walkToMetres)) + 1) * 60_000,
 		});
 	}
-	if (!input.rides.length && !input.transfers?.length && straight > 800)
-		options.push(
-			option({
-				id: "transit-estimate",
-				mode: "transit",
-				label: "Bus with a change",
-				parts: {
-					walk: walkMin(400) * 2,
-					wait: 9,
-					ride: Math.round((road / 17) * 60),
-					park: 0,
-				},
-				cost: profile.hasPass ? 0 : TICKET_60,
-				co2: Math.round(road * BUS_CO2_KM),
-				estimated: true,
-				notes: ["No direct ride in the next 90 min — estimate with one change"],
-			}),
-		);
 	const rush = rushHour(now);
 	const driveMin = Math.max(3, Math.round((road / (rush ? 17 : 27)) * 60));
 	const central = distance(to, CENTRE) < 1500;
@@ -406,9 +400,22 @@ export function rankOptions(
 		.filter((o) => !o.excluded)
 		.sort((a, b) => a.score - b.score);
 	const rest = ranked.filter((o) => o.excluded);
-	// Keep only the best public transport ride plus one alternative so modes stay comparable.
-	let rides = 0;
-	const shown = usable.filter((o) => o.mode !== "transit" || rides++ < 2);
+	// Preserve useful transit trade-offs before filling remaining slots by preference score.
+	const transit = usable.filter((o) => o.mode === "transit");
+	const fastest = [...transit].sort((a, b) => a.minutes - b.minutes)[0];
+	const direct = [...transit].sort(
+		(a, b) =>
+			(a.legs?.length ?? 1) - (b.legs?.length ?? 1) || a.minutes - b.minutes,
+	)[0];
+	const leastWalk = [...transit].sort(
+		(a, b) => a.parts.walk - b.parts.walk || a.minutes - b.minutes,
+	)[0];
+	const keep = new Set([fastest, direct, leastWalk].filter(Boolean));
+	for (const o of transit) {
+		if (keep.size >= 6) break;
+		keep.add(o);
+	}
+	const shown = usable.filter((o) => o.mode !== "transit" || keep.has(o));
 	// Green first, always: the best green option leads whenever a car would otherwise win.
 	const top = shown[0];
 	const green = shown.find((o) => o.green);
@@ -420,7 +427,19 @@ export function rankOptions(
 		shown.splice(shown.indexOf(green), 1);
 		shown.unshift(green);
 	}
-	for (const o of shown) o.reasons = explain(o, shown, profile, w.reasons);
+	for (const o of shown) {
+		o.reasons = explain(o, shown, profile, w.reasons);
+		if (o === fastest)
+			o.reasons.splice(o.promoted ? 1 : 0, 0, "Fastest public transport");
+		if (o === direct && (o.legs?.length ?? 1) === 1)
+			o.reasons.splice(o.promoted ? 1 : 0, 0, "Direct bus · no changes");
+		if (o === leastWalk)
+			o.reasons.splice(
+				o.promoted ? 1 : 0,
+				0,
+				"Least walking by public transport",
+			);
+	}
 	return [...shown, ...rest];
 }
 

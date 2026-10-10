@@ -1,4 +1,5 @@
 import { strFromU8, unzipSync } from "fflate";
+import { walkingAccess } from "../plan/access";
 import {
 	findRides,
 	findTransfers,
@@ -410,34 +411,38 @@ function changeStops(data: Schedule) {
 	changeIndex.set(data, index);
 	return index;
 }
-export async function getRides(from: Position, to: Position, walkPace = 75) {
+export async function getRides(
+	from: Position,
+	to: Position,
+	walkPace = 75,
+	maxWalkMinutes = 20,
+) {
 	const [data, feed] = await Promise.all([
 		getSchedule(),
 		getLive().catch(() => null),
 	]);
 	const now = Date.now();
-	const near = (p: Position, radius: number) =>
-		new Map(
-			data.network.stops
-				.map((s) => [s.id, distance(p, s)] as const)
-				.filter(([, d]) => d <= radius)
-				.sort((a, b) => a[1] - b[1])
-				.slice(0, 12),
-		);
+	const [access, egress] = await Promise.all([
+		walkingAccess(from, data.network.stops, walkPace, maxWalkMinutes),
+		walkingAccess(to, data.network.stops, walkPace, maxWalkMinutes, true),
+	]);
 	const vehicles = new Map(
 		(feed && !feed.stale ? feed.vehicles : [])
 			.filter((v) => v.tripId && freshVehicle(v, now))
 			.map((v) => [v.tripId, v]),
 	);
 	const today = localParts(now).date;
-	const days = [shiftDate(today, -1), today].map((date) => ({
-		date,
-		start: serviceStart(date),
-	}));
+	const days = [shiftDate(today, -1), today, shiftDate(today, 1)].map(
+		(date) => ({
+			date,
+			start: serviceStart(date),
+		}),
+	);
 	const query: RideSearch = {
 		now,
-		origins: near(from, 700),
-		destinations: near(to, 700),
+		origins: access.distances,
+		destinations: egress.distances,
+		boardingMinutes: 1,
 		departures: (stopId) => data.stopTimes.get(stopId) ?? [],
 		tripVisits: (tripId) => data.tripStops.get(tripId) ?? [],
 		routeOf: (tripId) => data.trips.get(tripId)?.route_id,
@@ -463,16 +468,22 @@ export async function getRides(from: Position, to: Position, walkPace = 75) {
 			const delay = running ? vehicles.get(tripId)?.delay : undefined;
 			return delay ?? null;
 		},
-		walkMinutes: (m: number) => Math.max(1, Math.round((m * 1.25) / walkPace)),
+		walkMinutes: (m: number) => Math.ceil(m / walkPace),
 	};
 	const rides = findRides(query);
 	const transfers = findTransfers({
 		...query,
 		nearbyStops: (stopId) =>
-			changeStops(data).get(stopId) ?? new Map([[stopId, 0]]),
+			new Map(
+				[...(changeStops(data).get(stopId) ?? new Map([[stopId, 0]]))].map(
+					([id, metres]) => [id, metres * 1.3],
+				),
+			),
 	});
 	const named = (r: TransitRide) => ({
 		...r,
+		walkToMinutes: query.walkMinutes(r.walkToMetres),
+		walkFromMinutes: query.walkMinutes(r.walkFromMetres),
 		fromStop: data.stops.get(r.fromStopId)?.name ?? r.fromStopId,
 		toStop: data.stops.get(r.toStopId)?.name ?? r.toStopId,
 		destination:
@@ -481,6 +492,7 @@ export async function getRides(from: Position, to: Position, walkPace = 75) {
 			"",
 	});
 	return {
+		walkingApproximate: access.approximate || egress.approximate,
 		rides: rides.map(named),
 		transfers: transfers.map((t) => ({ legs: t.legs.map(named) })),
 		generatedAt: now,

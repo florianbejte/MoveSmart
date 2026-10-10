@@ -13,6 +13,7 @@ export async function GET(request: Request) {
 	const params = new URL(request.url).searchParams;
 	const from = point(params.get("from"));
 	const to = point(params.get("to"));
+	const maxWalk = Math.min(30, Math.max(5, Number(params.get("walk")) || 20));
 	const pace = Number(params.get("pace")) || 75;
 	if (!from || !to)
 		return Response.json(
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
 		);
 	try {
 		const [transit, weather] = await Promise.all([
-			getRides(from, to, Math.min(90, Math.max(40, pace))),
+			getRides(from, to, Math.min(90, Math.max(40, pace)), maxWalk),
 			getWeather(),
 		]);
 		return Response.json(

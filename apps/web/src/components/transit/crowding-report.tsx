@@ -198,6 +198,9 @@ export function CrowdingReport({
 			) : (
 				<>
 					<div className="report-body">
+						<span className="flow-eyebrow">
+							{vehicle ? "Step 2 of 2 · Occupancy" : "Step 1 of 2 · Your bus"}
+						</span>
 						<h2 id="report-title">
 							{vehicle ? "How’s the ride?" : "Which bus are you on?"}
 						</h2>

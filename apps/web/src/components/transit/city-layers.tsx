@@ -153,9 +153,7 @@ export function CityLayers({
 			{open && (
 				<div className="city-layer-options">
 					<p className="helper-text">
-						Explore published transport and shelter data. Hover for a preview;
-						click a shape or marker to keep its details on the map. Zoom in to
-						reveal more icons.
+						Choose what appears on your map. Tap any marker for details.
 					</p>
 					{CITY_LAYERS.map((layer) => {
 						const feed = city.feeds[layer.id];
@@ -176,7 +174,11 @@ export function CityLayers({
 							eventStillRelevant(f.properties, now),
 						).length;
 						return (
-							<div key={layer.id} className="city-layer-option">
+							<div
+								key={layer.id}
+								className="city-layer-option"
+								data-enabled={checked}
+							>
 								<label>
 									<input
 										type="checkbox"
@@ -190,7 +192,10 @@ export function CityLayers({
 								</label>
 								{checked && (
 									<>
-										<p>{layer.note}</p>
+										<details className="layer-description">
+											<summary>About this layer</summary>
+											<p>{layer.note}</p>
+										</details>
 										<small role="status">
 											{delayed
 												? `Refresh unavailable${feed.data ? " · saved or partial data" : ""}`
@@ -252,13 +257,13 @@ export function CityLayers({
 							: "No current transit disruptions published."}
 					</p>
 				) : (
-					<>
-						<strong>
+					<details className="alert-details">
+						<summary>
 							{routeNames.length
 								? "Alerts for these route numbers"
 								: "Transit alerts"}{" "}
 							· {alerts.length}
-						</strong>
+						</summary>
 						{alerts.map((f) => (
 							<article key={f.properties.id}>
 								<b>
@@ -274,7 +279,7 @@ export function CityLayers({
 								</small>
 							</article>
 						))}
-					</>
+					</details>
 				)}
 				{routeNames.length > 0 && alerts.length > 0 && (
 					<small>

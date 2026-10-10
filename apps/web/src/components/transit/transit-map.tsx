@@ -658,7 +658,7 @@ export default function TransitMap(props: Props) {
 			]);
 	}, [ready, props.selectedStop]);
 	useEffect(() => {
-		if (!ready || !map.current) return;
+		if (!ready || !map.current?.getLayer("stops-points")) return;
 		tripStopPreview.current?.remove();
 		(map.current.getSource("trip-stops") as maplibregl.GeoJSONSource)?.setData({
 			type: "FeatureCollection",

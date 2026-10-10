@@ -2,6 +2,7 @@ import { Button } from "@MoveSmart/ui/components/button";
 import { Input } from "@MoveSmart/ui/components/input";
 import { Label } from "@MoveSmart/ui/components/label";
 import { useForm } from "@tanstack/react-form";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import z from "zod";
@@ -47,6 +48,9 @@ export default function SignInForm({
 
 	return (
 		<div className="account-panel account-form">
+			<Link className="account-map-link" href="/">
+				← Back to map
+			</Link>
 			<h1>Welcome back.</h1>
 
 			<form
@@ -66,6 +70,7 @@ export default function SignInForm({
 									id={field.name}
 									name={field.name}
 									type="email"
+									autoComplete="email"
 									value={field.state.value}
 									onBlur={field.handleBlur}
 									onChange={(e) => field.handleChange(e.target.value)}
@@ -89,6 +94,7 @@ export default function SignInForm({
 									id={field.name}
 									name={field.name}
 									type="password"
+									autoComplete="current-password"
 									value={field.state.value}
 									onBlur={field.handleBlur}
 									onChange={(e) => field.handleChange(e.target.value)}

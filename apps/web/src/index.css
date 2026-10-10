@@ -292,3 +292,34 @@ select {
 	font-weight: 800;
 	cursor: pointer;
 }
+
+.account-map-link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	color: #686876;
+	font-size: 13px;
+	margin-bottom: 24px;
+}
+.account-form {
+	max-width: 440px;
+	border-radius: 24px;
+}
+.account-form input {
+	min-height: 48px;
+	font-size: 16px;
+	border-radius: 12px;
+}
+.account-form button {
+	min-height: 44px;
+}
+@media (max-width: 600px) {
+	.account-panel.account-form {
+		margin: 16px 12px;
+		padding: 24px;
+		width: calc(100% - 24px);
+	}
+	.account-form h1 {
+		font-size: 28px;
+	}
+}

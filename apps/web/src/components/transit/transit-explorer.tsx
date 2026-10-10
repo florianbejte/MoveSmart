@@ -195,6 +195,17 @@ export default function TransitExplorer() {
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const sheetPointer = useRef<number | null>(null);
 	const sheetSwiped = useRef(false);
+	function openSaved() {
+		setSavedOpen(true);
+		setPlanOpen(false);
+		setCityOpen(false);
+		setSelection(null);
+		setPreviewTrip(null);
+		setFiltersOpen(false);
+		setQuery("");
+		setSheet("half");
+		panelContent.current?.scrollTo({ top: 0 });
+	}
 	function openNearby() {
 		setSavedOpen(false);
 		setSelection(null);
@@ -445,17 +456,21 @@ export default function TransitExplorer() {
 					<div>
 						<h1>
 							{planOpen
-								? "Your best way."
+								? "Let’s get there."
 								: cityOpen
 									? "A closer look."
-									: "Find your ride."}
+									: savedOpen
+										? "Saved places."
+										: "Find your ride."}
 						</h1>
 						<p>
 							{planOpen
 								? "Bus, bike, walk or car — ranked for you."
 								: cityOpen
 									? "The city, layer by layer."
-									: "Vilnius is moving. Come along."}
+									: savedOpen
+										? "Your everyday journeys, one tap away."
+										: "Vilnius is moving. Come along."}
 						</p>
 					</div>
 					<button
@@ -476,7 +491,7 @@ export default function TransitExplorer() {
 						<BusFront size={25} />
 					</span>
 				</div>
-				<label className="transit-search">
+				<label className="transit-search" hidden={savedOpen}>
 					<Search size={19} />
 					<input
 						value={query}
@@ -533,18 +548,7 @@ export default function TransitExplorer() {
 						Layers
 						<span className="layer-count">{city.enabled.length}</span>
 					</button>
-					<button
-						type="button"
-						aria-pressed={savedOpen}
-						onClick={() => {
-							setSavedOpen(true);
-							setPlanOpen(false);
-							setCityOpen(false);
-							setSelection(null);
-							setPreviewTrip(null);
-							setSheet("half");
-						}}
-					>
+					<button type="button" aria-pressed={savedOpen} onClick={openSaved}>
 						<Star size={16} />
 						Saved
 					</button>
@@ -681,10 +685,7 @@ export default function TransitExplorer() {
 								<MapSymbol kind="community" color="#7343aa" />
 								Community reports · {community.features.length}
 							</label>
-							<p>
-								Rider observations, separate from official alerts. Click a
-								purple icon to view reports and confirm.
-							</p>
+							<p>Rider observations · tap purple markers to read.</p>
 							{reports.error && (
 								<p role="status">
 									Community reports unavailable.{" "}
@@ -696,23 +697,25 @@ export default function TransitExplorer() {
 						</section>
 					)}
 					{favourites.error && <p role="status">{favourites.error}</p>}
-					<CityLayers
-						city={city}
-						now={now}
-						open={cityOpen}
-						onOpen={setCityOpen}
-						routeNames={
-							selectedVehicle
-								? [selectedVehicle.route]
-								: selectedStop
-									? selectedStop.routeIds.map(
-											(id) => routeById.get(id)?.name ?? "",
-										)
-									: routeId
-										? [routeById.get(routeId)?.name ?? ""]
-										: []
-						}
-					/>
+					<div hidden={planOpen || savedOpen}>
+						<CityLayers
+							city={city}
+							now={now}
+							open={cityOpen}
+							onOpen={setCityOpen}
+							routeNames={
+								selectedVehicle
+									? [selectedVehicle.route]
+									: selectedStop
+										? selectedStop.routeIds.map(
+												(id) => routeById.get(id)?.name ?? "",
+											)
+										: routeId
+											? [routeById.get(routeId)?.name ?? ""]
+											: []
+							}
+						/>
+					</div>
 					<div
 						className="transit-results"
 						hidden={cityOpen || planOpen}
@@ -755,30 +758,34 @@ export default function TransitExplorer() {
 										label="stop"
 									/>
 								)}
-								{selectedStop && (
-									<StopCommunity
-										stop={selectedStop}
-										issues={reports.error ? [] : (reports.data?.issues ?? [])}
-										now={now}
-										onReport={() => setStopReport(selectedStop)}
-										onRefresh={reports.retry}
-										unavailable={!!reports.error}
-									/>
-								)}
-								{selectedStop && (
-									<p className="helper-text" role="status">
-										{stopRoutes.error
-											? "Route outlines unavailable. Try again."
-											: !stopRoutes.data
-												? "Loading routes from this stop…"
-												: `${stopRoutes.data.stale ? "Cached timetable · " : ""}Showing routes from this platform. Check departures for service times.`}
-										{stopRoutes.error && (
-											<button type="button" onClick={stopRoutes.retry}>
-												Retry
-											</button>
-										)}
-									</p>
-								)}
+
+								<details className="stop-more-info">
+									<summary>Stop information & community</summary>{" "}
+									{selectedStop && (
+										<StopCommunity
+											stop={selectedStop}
+											issues={reports.error ? [] : (reports.data?.issues ?? [])}
+											now={now}
+											onReport={() => setStopReport(selectedStop)}
+											onRefresh={reports.retry}
+											unavailable={!!reports.error}
+										/>
+									)}
+									{selectedStop && (
+										<p className="helper-text" role="status">
+											{stopRoutes.error
+												? "Route outlines unavailable. Try again."
+												: !stopRoutes.data
+													? "Loading routes from this stop…"
+													: `${stopRoutes.data.stale ? "Cached timetable · " : ""}Showing routes from this platform. Check departures for service times.`}
+											{stopRoutes.error && (
+												<button type="button" onClick={stopRoutes.retry}>
+													Retry
+												</button>
+											)}
+										</p>
+									)}
+								</details>
 								<div className="stop-route-list">
 									{selectedStop?.routeIds.map((id) => (
 										<RouteBadge key={id} route={routeById.get(id)} />
@@ -962,25 +969,28 @@ export default function TransitExplorer() {
 												onDone={reports.retry}
 											/>
 										))}
-									<div className="vehicle-metrics">
-										<div>
-											<span>Speed</span>
-											<strong>
-												{selectedVehicle.speed}
-												<small> km/h</small>
-											</strong>
+									<details className="vehicle-service-details">
+										<summary>Vehicle & service details</summary>
+										<div className="vehicle-metrics">
+											<div>
+												<span>Speed</span>
+												<strong>
+													{selectedVehicle.speed}
+													<small> km/h</small>
+												</strong>
+											</div>
+											<div>
+												<span>Schedule deviation</span>
+												<strong>
+													{!selectedFresh || selectedVehicle.delay === null
+														? "Unknown"
+														: Math.abs(selectedVehicle.delay) < 60
+															? "On time"
+															: `${Math.round(Math.abs(selectedVehicle.delay) / 60)} min ${selectedVehicle.delay > 0 ? "late" : "early"}`}
+												</strong>
+											</div>
 										</div>
-										<div>
-											<span>Schedule deviation</span>
-											<strong>
-												{!selectedFresh || selectedVehicle.delay === null
-													? "Unknown"
-													: Math.abs(selectedVehicle.delay) < 60
-														? "On time"
-														: `${Math.round(Math.abs(selectedVehicle.delay) / 60)} min ${selectedVehicle.delay > 0 ? "late" : "early"}`}
-											</strong>
-										</div>
-									</div>
+									</details>
 									<p
 										className={`vehicle-update ${selectedFresh ? "" : "warning"}`}
 									>
@@ -1052,6 +1062,7 @@ export default function TransitExplorer() {
 									setNearbyOnly(false);
 									setFiltersOpen(true);
 								}}
+								onExplore={openNearby}
 								onRemove={favourites.toggle}
 							/>
 						) : (
@@ -1357,14 +1368,19 @@ export default function TransitExplorer() {
 				<button
 					type="button"
 					aria-pressed={sheet === "peek"}
-					onClick={() => setSheet("peek")}
+					onClick={() => {
+						openNearby();
+						setSheet("peek");
+					}}
 				>
 					<MapIcon size={21} />
 					<span>Map</span>
 				</button>
 				<button
 					type="button"
-					aria-pressed={sheet !== "peek" && !cityOpen && !planOpen}
+					aria-pressed={
+						sheet !== "peek" && !cityOpen && !planOpen && !savedOpen
+					}
 					onClick={openNearby}
 				>
 					<BusFront size={21} />
@@ -1385,6 +1401,14 @@ export default function TransitExplorer() {
 				>
 					<Layers2 size={21} />
 					<span>Layers</span>
+				</button>
+				<button
+					type="button"
+					aria-pressed={sheet !== "peek" && savedOpen}
+					onClick={openSaved}
+				>
+					<Star size={21} />
+					<span>Saved</span>
 				</button>
 			</nav>
 			{welcome && (

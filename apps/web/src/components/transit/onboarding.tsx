@@ -86,7 +86,9 @@ export function Onboarding({
 			</div>
 			{step === 0 && (
 				<section>
-					<span className="bubble-tag lime">COMFY</span>
+					<span className="flow-eyebrow">
+						Step {step + 1} of {STEPS.length} · Your travel preferences
+					</span>
 					<h2 id="onboarding-title">Who’s usually travelling?</h2>
 					<p>
 						We’ll suggest the way that suits you — bus, walk, bike, scooter or
@@ -113,7 +115,9 @@ export function Onboarding({
 			)}
 			{step === 1 && (
 				<section>
-					<span className="bubble-tag navy">NEXT</span>
+					<span className="flow-eyebrow">
+						Step {step + 1} of {STEPS.length} · Your travel preferences
+					</span>
 					<h2 id="onboarding-title">What can you use?</h2>
 					<p>We only suggest what you actually have.</p>
 					<div className="choice-grid">
@@ -149,7 +153,9 @@ export function Onboarding({
 			)}
 			{step === 2 && (
 				<section>
-					<span className="bubble-tag pink">BOLD</span>
+					<span className="flow-eyebrow">
+						Step {step + 1} of {STEPS.length} · Your travel preferences
+					</span>
 					<h2 id="onboarding-title">What matters most?</h2>
 					<p>Choose up to two. They decide how we rank your options.</p>
 					<div className="choice-grid">
@@ -170,7 +176,9 @@ export function Onboarding({
 			)}
 			{step === 3 && (
 				<section>
-					<span className="bubble-tag red">ARTISTIC</span>
+					<span className="flow-eyebrow">
+						Step {step + 1} of {STEPS.length} · Your travel preferences
+					</span>
 					<h2 id="onboarding-title">How far will you walk?</h2>
 					<p>Longer walks get a penalty when we compare routes.</p>
 					<fieldset className="walk-limits">
@@ -200,7 +208,9 @@ export function Onboarding({
 			)}
 			{last && (
 				<section className="onboarding-summary">
-					<span className="bubble-tag lime">YOU</span>
+					<span className="flow-eyebrow">
+						Step {step + 1} of {STEPS.length} · Your travel preferences
+					</span>
 					<h2 id="onboarding-title">{persona(p)}</h2>
 					<p>
 						Every trip is ranked for you using live buses, weather and your
