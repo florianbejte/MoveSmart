@@ -2,7 +2,69 @@
 
 This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Convex, and more.
 
-## Features
+## Live Vilnius transit
+
+The home page uses MapLibre with OpenStreetMap tiles, live JUDU vehicle positions,
+and GTFS schedules. No account or transit API key is needed.
+
+- Live bus and trolleybus markers refresh every 15 seconds while the page is visible.
+- Search stops, routes and destinations; filter by mode, route or a 2 km radius.
+- “Use my location” asks for browser permission and sorts nearby stops and vehicles.
+  Without permission, distances use the map center. Location stays in the browser;
+  ordinary map tile requests reveal the viewed map area to the tile provider.
+- Select a stop/platform for departures, or a vehicle for its trip and route shape.
+- Estimates apply the vehicle's reported schedule deviation to its GTFS departure
+  time. They are not official stop-level predictions. Unmatched or stale vehicles
+  fall back to scheduled departures; positions older than two minutes are faded.
+- Service calendars, date exceptions, Vilnius time and trips continuing after midnight
+  are handled server-side.
+
+### Run and verify
+
+```bash
+bun install
+bun run dev:web
+# Open http://localhost:3001
+bun run --cwd apps/web test
+bun run check-types
+bun run --cwd apps/web build
+```
+
+### Data and hosting
+
+`/api/transit?kind=network` returns stops and routes; `kind=vehicles` returns live
+positions. `kind=stop&id=...` returns departures and `kind=trip&id=...` returns a
+trip's shape and stops. All upstream URLs are fixed; the API cannot proxy arbitrary URLs.
+
+Sources: [JUDU open data](https://judu.lt/kita-informacija/atviri-duomenys/),
+[GTFS](https://www.stops.lt/vilnius/vilnius/gtfs.zip), and
+[GPS](https://stops.lt/vilnius/gps_full.txt). Observe the provider's published usage terms.
+
+GTFS is cached for six hours, GPS for ten seconds, with concurrent requests shared
+within each server process. Errors retain the last usable snapshot, explicitly marked
+stale. The cache is in memory: cold starts fetch fresh data; multi-instance deployments
+should use a shared cache to avoid multiplying upstream traffic. A Node.js server is
+required; static-only export does not support these API routes.
+
+The default raster tiles use `tile.openstreetmap.org`, preserving browser caching,
+Referer headers and visible attribution. No tile scraping, bulk download or offline
+prefetch is implemented. For higher-volume hosting, configure an OSM-based tile
+provider appropriate to your traffic and its terms:
+
+```dotenv
+NEXT_PUBLIC_MAP_TILE_URL=https://your-provider.example/{z}/{x}/{y}.png
+NEXT_PUBLIC_MAP_ATTRIBUTION=Your provider attribution plus OpenStreetMap contributors
+```
+
+The URL is a 256px raster tile template. Set these in `apps/web/.env` or your hosting
+environment and rebuild. Include the attribution links required by your provider.
+See [OSM tile usage policy](https://operations.osmfoundation.org/policies/tiles/).
+
+Development and production builds automatically copy MapLibre's ESM worker and
+shared module to `public/maplibre/`. Fonts are bundled locally, so builds don't
+need to contact Google Fonts.
+
+## Stack
 
 - **TypeScript** - For type safety and improved developer experience
 - **Next.js** - Full-stack React framework
@@ -24,7 +86,9 @@ bun install
 
 ## Convex Setup
 
-This project uses Convex as a backend. You'll need to set up Convex before running the app:
+The public transit map runs without Convex. Start it with `bun run dev:web`.
+
+Accounts use Convex and Better Auth. To enable accounts:
 
 ```bash
 bun run dev:setup

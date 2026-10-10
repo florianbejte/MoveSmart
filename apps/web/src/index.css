@@ -1,1 +1,92 @@
 @import "@MoveSmart/ui/globals.css";
+
+.app-header {
+	height: 72px;
+	padding: 0 30px;
+	display: flex;
+	align-items: center;
+	gap: 70px;
+	background: #fff;
+	color: #193f38;
+	border-bottom: 1px solid #e5ebe7;
+	font-family: var(--font-geist-sans), sans-serif;
+}
+.app-brand {
+	display: flex;
+	align-items: center;
+	font-size: 25px;
+	font-weight: 750;
+	letter-spacing: -1.2px;
+	text-decoration: none;
+}
+.app-brand > span:not(.brand-mark):not(.brand-dot) {
+	font-weight: 450;
+}
+.brand-mark {
+	display: grid;
+	place-items: center;
+	width: 35px;
+	height: 35px;
+	border-radius: 10px;
+	background: #167568;
+	color: white;
+	margin-right: 10px;
+}
+.brand-dot {
+	color: #70a843;
+}
+.app-header nav {
+	display: flex;
+	align-self: stretch;
+	gap: 32px;
+	font-size: 13px;
+	font-weight: 600;
+}
+.app-header nav a {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: #7a8883;
+	border-bottom: 3px solid transparent;
+	padding-top: 3px;
+}
+.app-header nav a.current {
+	color: #167568;
+	border-color: #167568;
+}
+.header-city {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	color: #72807a;
+}
+.header-city span {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: #77a74d;
+}
+@media (max-width: 700px) {
+	.app-header {
+		height: 60px;
+		padding: 0 18px;
+		gap: 24px;
+	}
+	.app-brand {
+		font-size: 22px;
+	}
+	.app-header nav {
+		margin-left: auto;
+		gap: 20px;
+	}
+	.header-city {
+		display: none;
+	}
+}
+
+:root {
+	--font-geist-sans: "Geist Variable";
+	--font-geist-mono: "Geist Mono Variable";
+}

@@ -1,31 +1,35 @@
 "use client";
+import { ArrowUpRight, MoveUpRight } from "lucide-react";
 import Link from "next/link";
-
-import { ModeToggle } from "./mode-toggle";
+import { usePathname } from "next/navigation";
 
 export default function Header() {
-  const links = [
-    { to: "/", label: "Home" },
-    { to: "/dashboard", label: "Dashboard" },
-  ] as const;
-
-  return (
-    <div>
-      <div className="flex flex-row items-center justify-between px-2 py-1">
-        <nav className="flex gap-4 text-lg">
-          {links.map(({ to, label }) => {
-            return (
-              <Link key={to} href={to}>
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="flex items-center gap-2">
-          <ModeToggle />
-        </div>
-      </div>
-      <hr />
-    </div>
-  );
+	const pathname = usePathname();
+	return (
+		<header className="app-header">
+			<Link href="/" className="app-brand">
+				<span className="brand-mark">
+					<MoveUpRight size={22} strokeWidth={3} />
+				</span>
+				move<span>smart</span>
+				<span className="brand-dot">.</span>
+			</Link>
+			<nav aria-label="Main navigation">
+				<Link href="/" className={pathname === "/" ? "current" : ""}>
+					Live map
+				</Link>
+				<Link
+					href="/dashboard"
+					className={pathname === "/dashboard" ? "current" : ""}
+				>
+					Account
+					<ArrowUpRight size={14} />
+				</Link>
+			</nav>
+			<span className="header-city">
+				<span />
+				Made for moving in Vilnius
+			</span>
+		</header>
+	);
 }
