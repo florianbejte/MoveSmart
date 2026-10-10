@@ -36,10 +36,13 @@ export function Onboarding({
 	initial,
 	onDone,
 	onSkip,
+	doneLabel = "Plan my trips",
 }: {
 	initial: Profile | null;
 	onDone: (profile: Profile) => void;
+	/** Closing without finishing; when editing, this cancels without saving. */
 	onSkip: () => void;
+	doneLabel?: string;
 }) {
 	const [step, setStep] = useState(0);
 	const [p, setP] = useState<Profile>(initial ?? DEFAULT_PROFILE);
@@ -235,7 +238,7 @@ export function Onboarding({
 					</button>
 				) : (
 					<button type="button" className="onboarding-back" onClick={onSkip}>
-						Skip
+						{initial ? "Cancel" : "Skip"}
 					</button>
 				)}
 				<button
@@ -243,7 +246,7 @@ export function Onboarding({
 					className="onboarding-next"
 					onClick={() => (last ? onDone(p) : setStep(step + 1))}
 				>
-					{last ? "Plan my trips" : "Next"}
+					{last ? doneLabel : "Next"}
 					<ArrowRight size={16} />
 				</button>
 			</div>

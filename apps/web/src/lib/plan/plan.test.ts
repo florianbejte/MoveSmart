@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
+import { toHits } from "./geocode";
 import {
 	estimateOptions,
 	rankOptions,
@@ -9,6 +10,7 @@ import {
 } from "./options";
 import { sliceShape } from "./paths";
 import { DEFAULT_PROFILE, type Profile, persona } from "./profile";
+import { quote } from "./providers";
 import { findRides, type Visit } from "./transit";
 
 const START = Date.parse("2026-10-09T21:00:00Z"); // Vilnius midnight, 10 Oct
@@ -92,14 +94,14 @@ test("needs exclude unsuitable modes with a reason", () => {
 });
 
 test("priorities change the recommendation", () => {
-	const fast = plan({ ...DEFAULT_PROFILE, sharedOk: false });
 	const saver = plan({
 		...DEFAULT_PROFILE,
 		sharedOk: false,
 		priorities: ["cost"],
 	});
-	assert.equal(best(fast)?.mode, "taxi");
+	// Cost-focused riders pick the bus on its own merits, without a nudge.
 	assert.equal(best(saver)?.mode, "transit");
+	assert.equal(best(saver)?.promoted, undefined);
 	const green = plan({
 		...DEFAULT_PROFILE,
 		hasBike: true,
@@ -164,4 +166,140 @@ test("trip shapes are cut between the boarding and alighting stops", () => {
 			[25.3, 54.0],
 		],
 	);
+});
+
+test("geocoder results drop noise, dedupe and read like addresses", () => {
+	const f = (props: Record<string, string>, lon = 25.28, lat = 54.68) => ({
+		geometry: { coordinates: [lon, lat] as [number, number] },
+		properties: { city: "Vilnius", ...props },
+	});
+	assert.deepEqual(
+		toHits([
+			f({
+				name: "G9",
+				street: "Gedimino pr.",
+				housenumber: "9",
+				osm_value: "mall",
+			}),
+			f({ street: "Gedimino pr.", housenumber: "9", osm_value: "atm" }),
+			f({
+				name: "G9",
+				street: "Gedimino pr.",
+				housenumber: "9",
+				osm_value: "mall",
+			}),
+			f({
+				street: "Kalvarijų g.",
+				housenumber: "1",
+				osm_value: "house",
+				district: "Žirmūnai",
+			}),
+		]).map((h) => [h.name, h.detail, h.kind]),
+		[
+			["G9", "Gedimino pr. 9", "mall"],
+			["Kalvarijų g. 1", "Žirmūnai", "house"],
+		],
+	);
+	assert.deepEqual(
+		toHits(
+			[
+				f({
+					name: "G9",
+					street: "Gedimino pr.",
+					housenumber: "9",
+					osm_value: "mall",
+				}),
+			],
+			"Gedimino pr 9",
+		).map((h) => [h.name, h.kind]),
+		[
+			["Gedimino pr. 9", "address"],
+			["G9", "mall"],
+		],
+	);
+});
+
+test("taxi and car-sharing quotes pick the cheapest and most reliable", () => {
+	const taxis = quote("taxi", { km: 5, minutes: 12, rush: false }, ["speed"]);
+	const byId = Object.fromEntries(taxis.map((q) => [q.id, q]));
+	assert.equal(byId.bolt.price, 3.9); // 0.80 + 5 × 0.33 + 12 × 0.12
+	assert.ok(byId.bolt.badges.includes("Cheapest"));
+	assert.ok(byId.bolt.badges.includes("Most reliable"));
+	assert.equal(taxis[0].id, "bolt");
+	const rush = quote("taxi", { km: 5, minutes: 12, rush: true }, ["cost"]);
+	const bolt = rush.find((q) => q.id === "bolt");
+	assert.equal(bolt?.priceHigh, 5.9);
+	assert.ok(bolt?.badges.includes("Surge pricing likely now"));
+	// Metered taxis don't surge, so at rush hour they can be the cheapest.
+	assert.equal(rush.find((q) => q.badges.includes("Cheapest"))?.id, "metered");
+	const cars = quote("carshare", { km: 5, minutes: 14, rush: false }, ["eco"]);
+	assert.equal(cars.find((q) => q.id === "bolt-drive")?.price, null);
+	assert.ok(cars.find((q) => q.id === "spark")?.badges.includes("Electric"));
+});
+
+test("a reasonable bus beats a faster car for the city's sake, with the CO₂ shown", () => {
+	const driver = { ...DEFAULT_PROFILE, hasCar: true, sharedOk: false };
+	const ride = {
+		tripId: "t",
+		routeId: "r53",
+		fromStopId: "a",
+		toStopId: "b",
+		walkToMetres: 200,
+		walkFromMetres: 200,
+		departAt: NOW + 6 * 60_000,
+		arriveAt: NOW + 26 * 60_000,
+		stops: 8,
+		live: true,
+		delaySeconds: 0,
+	};
+	const ranked = rankOptions(
+		estimateOptions({
+			from,
+			to: far,
+			now: NOW,
+			rides: [ride],
+			routeName: () => "53",
+			profile: driver,
+		}),
+		driver,
+		null,
+	);
+	const top = best(ranked);
+	assert.equal(top?.mode, "transit");
+	assert.ok(top?.green);
+	assert.ok(top?.reasons.some((r) => r.startsWith("Saves")));
+	const car = ranked.find((o) => o.mode === "car");
+	assert.ok(car?.reasons.some((r) => r.endsWith("the CO₂ of the bus")));
+});
+
+test("a much slower green option still leads, labelled as a trade-off", () => {
+	const fast = plan({ ...DEFAULT_PROFILE, sharedOk: false });
+	const top = best(fast);
+	assert.equal(top?.mode, "transit");
+	assert.equal(top?.promoted, "greener");
+	assert.match(top?.reasons[0] ?? "", /^Greener way — \d+ min longer, saves/);
+	// The car-based option stays visible right after it.
+	assert.equal(fast.filter((o) => !o.excluded)[1]?.mode, "taxi");
+});
+
+test("no green nudge when no green option suits the rider", () => {
+	const rider = {
+		...DEFAULT_PROFILE,
+		needs: ["wheelchair" as const],
+		walkLimit: 5,
+	};
+	const ranked = rankOptions(
+		estimateOptions({
+			from,
+			to: far,
+			now: NOW,
+			rides: [],
+			routeName: () => "",
+			profile: rider,
+		}),
+		rider,
+		null,
+	);
+	assert.equal(best(ranked)?.mode, "taxi");
+	assert.equal(best(ranked)?.promoted, undefined);
 });

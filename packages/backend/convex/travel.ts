@@ -92,3 +92,47 @@ export const rememberPlace = mutation({
 			});
 	},
 });
+
+const GREEN = new Set(["transit", "walk", "bike"]);
+
+/** Record a green trip the user chose; repeated taps within 10 minutes count once. */
+export const logGreenTrip = mutation({
+	args: { mode: v.string(), co2Saved: v.number() },
+	handler: async (ctx, { mode, co2Saved }) => {
+		const id = await userId(ctx);
+		if (!id || !GREEN.has(mode)) return;
+		// A single city trip can't plausibly save more than ~15 kg vs. driving.
+		const saved = Math.max(0, Math.min(15_000, Math.round(co2Saved)));
+		const last = await ctx.db
+			.query("greenTrips")
+			.withIndex("by_user", (q) => q.eq("userId", id))
+			.order("desc")
+			.first();
+		if (last && Date.now() - last.at < 10 * 60_000)
+			await ctx.db.patch(last._id, { mode, co2Saved: saved, at: Date.now() });
+		else
+			await ctx.db.insert("greenTrips", {
+				userId: id,
+				mode,
+				co2Saved: saved,
+				at: Date.now(),
+			});
+	},
+});
+
+/** Total CO₂ saved and green trips taken. */
+export const impact = query({
+	args: {},
+	handler: async (ctx) => {
+		const id = await userId(ctx);
+		if (!id) return { grams: 0, trips: 0 };
+		const trips = await ctx.db
+			.query("greenTrips")
+			.withIndex("by_user", (q) => q.eq("userId", id))
+			.take(5000);
+		return {
+			grams: trips.reduce((sum, t) => sum + t.co2Saved, 0),
+			trips: trips.length,
+		};
+	},
+});

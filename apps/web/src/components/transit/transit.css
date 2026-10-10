@@ -1712,7 +1712,8 @@
 
 /* Onboarding: travel profile questions */
 .onboarding {
-	/* The global reset removes the browser's dialog centring. */
+	/* The global reset removes the browser's dialog centring; the app is light-only. */
+	background: white;
 	position: fixed;
 	inset: 0;
 	margin: auto;
@@ -2054,4 +2055,228 @@
 	color: var(--red);
 	font-size: 12px;
 	font-weight: 700;
+}
+.suggestion-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner suggestions are a separate container. */
+.suggestion-text small {
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--slate);
+	text-transform: none;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Destination first: no map until the rider picks a way to go */
+.transit-app[data-stage="choose"] .map-panel {
+	visibility: hidden;
+}
+.transit-app[data-stage="choose"] .explorer-panel {
+	top: 0;
+	height: auto;
+	border-radius: 0;
+	box-shadow: none;
+	animation: none;
+	transform: none;
+	visibility: visible;
+}
+.transit-app[data-stage="choose"] :is(.sheet-handle, .sheet-size-button) {
+	display: none;
+}
+@media (min-width: 900px) {
+	.transit-app[data-stage="choose"] {
+		background: var(--mist);
+	}
+	.transit-app[data-stage="choose"] .explorer-panel {
+		top: 24px;
+		bottom: 24px;
+		left: 50%;
+		width: min(640px, calc(100% - 48px));
+		transform: translateX(-50%);
+		border-radius: 22px 22px 0 22px;
+		box-shadow: 0 8px 42px #4144541c;
+	}
+}
+.back-to-options {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+	margin-top: 12px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--red);
+	font-size: 13px;
+	font-weight: 800;
+}
+.option-select {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+}
+.plan-option.going {
+	border: 2px solid var(--ink);
+}
+.mode-carshare {
+	background: #3d9a3a;
+}
+.providers {
+	margin-top: 14px;
+	padding-top: 12px;
+	border-top: 1px solid #e0e0e0;
+}
+.providers h4 {
+	margin: 0 0 8px;
+	font-size: 13px;
+	font-weight: 800;
+}
+.providers ol {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.providers li {
+	padding: 10px 12px;
+	border: 1px solid #e0e0e0;
+	border-radius: 12px 12px 0 12px;
+}
+.providers li.recommended {
+	border: 2px solid var(--red);
+	background: #fff5f5;
+}
+.provider-main {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+}
+.provider-name {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: provider list is a separate container. */
+.provider-name strong {
+	font-size: 14px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: provider list is a separate container. */
+.provider-name small {
+	font-size: 11px;
+	color: var(--slate);
+}
+.provider-pick {
+	align-self: flex-start;
+	font-size: 9px;
+	font-weight: 900;
+	letter-spacing: 0.5px;
+	text-transform: uppercase;
+	color: white;
+	background: var(--red);
+	padding: 2px 7px;
+	border-radius: 6px 6px 0 6px;
+}
+.provider-price {
+	font-size: 15px;
+	font-weight: 800;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.provider-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 8px;
+}
+.provider-badges span {
+	font-size: 10px;
+	font-weight: 700;
+	padding: 2px 7px;
+	border-radius: 6px 6px 0 6px;
+	background: #e8f6e7;
+	color: #2b7a28;
+}
+.provider-badges span.warn {
+	background: #fff0d9;
+	color: #8a5a00;
+}
+.provider-open {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin-top: 8px;
+	font-size: 12px;
+	font-weight: 800;
+	color: var(--red);
+}
+
+/* Sustainability: make CO₂ visible and celebrate green choices */
+.impact-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	margin: 0 0 12px;
+	padding: 10px 12px;
+	border-radius: 12px 12px 0 12px;
+	background: #e8f6e7;
+	color: #1c4b1d;
+	font-size: 12px;
+	line-height: 1.5;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: impact notes are separate containers. */
+.impact-banner svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: impact notes are separate containers. */
+.impact-thanks svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: impact notes are separate containers. */
+.impact-nudge svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+.best-tag.green {
+	background: #3d9a3a;
+}
+.plan-option.best:has(.best-tag.green) {
+	border-color: #3d9a3a;
+}
+.plan-facts span.co2-good {
+	background: #e8f6e7;
+	color: #1c4b1d;
+}
+.plan-facts span.co2-bad {
+	background: #fdebec;
+	color: #7e2324;
+}
+.impact-thanks,
+.impact-nudge {
+	display: flex;
+	gap: 8px;
+	margin: 12px 0 0;
+	padding: 10px 12px;
+	border-radius: 12px 12px 0 12px;
+	font-size: 12px;
+	line-height: 1.5;
+}
+.impact-thanks {
+	background: #e8f6e7;
+	color: #1c4b1d;
+}
+.impact-nudge {
+	background: #fff5f5;
+	color: #7e2324;
 }

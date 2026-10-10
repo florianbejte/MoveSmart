@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import SignInForm from "@/components/sign-in-form";
 import SignUpForm from "@/components/sign-up-form";
+import { TravelProfileCard } from "@/components/travel-profile-card";
 import UserMenu from "@/components/user-menu";
 
 function DashboardContent() {
@@ -21,6 +22,7 @@ function DashboardContent() {
 				account menu to sign out.
 			</p>
 			<UserMenu />
+			<TravelProfileCard />
 			<Link href="/" className="account-link">
 				Plan a trip
 			</Link>

@@ -142,12 +142,38 @@ export default function TransitExplorer() {
 	const [now, setNow] = useState(Date.now());
 	const city = useCityLayers(now);
 	const [cityOpen, setCityOpen] = useState(false);
-	const [planOpen, setPlanOpen] = useState(false);
+	// The app opens on "where to?"; the map appears once a way is chosen.
+	const [planOpen, setPlanOpen] = useState(true);
+	const [planStage, setPlanStage] = useState<"choose" | "map">("choose");
+	useEffect(() => {
+		if (planStage === "map") setSheet("half");
+	}, [planStage]);
 	const account = useAccount();
 	const profile = account.profile;
 	const [editingProfile, setEditingProfile] = useState(false);
 	const [guestChosen, setGuestChosen] = useState(false);
 	const [planPath, setPlanPath] = useState<PlanPath | null>(null);
+	// While following a chosen trip, the map shows only that trip: your bus and its two stops.
+	const tripFocus = planOpen && planStage === "map" && !!planPath;
+	const tripVehicles = useMemo(() => {
+		const ride = planPath?.ride;
+		if (!tripFocus || !ride) return EMPTY_VEHICLES;
+		const own = live.data?.vehicles.filter((v) => v.tripId === ride.tripId);
+		// Before your bus starts its trip, show the route's buses so you can see it coming.
+		return own?.length
+			? own
+			: (live.data?.vehicles.filter((v) => v.routeId === ride.routeId) ??
+					EMPTY_VEHICLES);
+	}, [tripFocus, planPath, live.data]);
+	const tripStops = useMemo(
+		() =>
+			tripFocus && planPath?.ride
+				? (network.data?.stops ?? EMPTY_STOPS).filter((s) =>
+						planPath.ride?.stopIds.includes(s.id),
+					)
+				: EMPTY_STOPS,
+		[tripFocus, planPath, network.data],
+	);
 	useEffect(() => {
 		try {
 			setGuestChosen(sessionStorage.getItem("movesmart-guest") === "1");
@@ -375,6 +401,7 @@ export default function TransitExplorer() {
 			data-sheet={sheet}
 			data-view={planOpen ? "plan" : cityOpen ? "layers" : "nearby"}
 			data-detail={!!selection && !cityOpen && !planOpen}
+			data-stage={planOpen ? planStage : "map"}
 		>
 			<aside className="explorer-panel" aria-label="Transit explorer">
 				<button
@@ -1144,11 +1171,11 @@ export default function TransitExplorer() {
 						usingLocation={!!location}
 						locating={locating}
 						onLocate={locate}
-						center={center}
 						profile={profile ?? DEFAULT_PROFILE}
 						places={account.places}
 						onPlace={account.rememberPlace}
 						onPath={setPlanPath}
+						onStage={setPlanStage}
 						onEditProfile={() => setEditingProfile(true)}
 						now={now}
 					/>
@@ -1195,22 +1222,24 @@ export default function TransitExplorer() {
 					stale={feedStale}
 					now={now}
 					vehicles={
-						selectedVehicle
-							? vehicles.filter((v) =>
-									selectedVehicle.routeId
-										? v.routeId === selectedVehicle.routeId
-										: v.route === selectedVehicle.route &&
-											v.mode === selectedVehicle.mode,
-								)
-							: selectedStop
-								? vehicles.filter(
-										(v) =>
-											v.routeId !== null &&
-											selectedStop.routeIds.includes(v.routeId),
+						tripFocus
+							? tripVehicles
+							: selectedVehicle
+								? vehicles.filter((v) =>
+										selectedVehicle.routeId
+											? v.routeId === selectedVehicle.routeId
+											: v.route === selectedVehicle.route &&
+												v.mode === selectedVehicle.mode,
 									)
-								: filteredVehicles
+								: selectedStop
+									? vehicles.filter(
+											(v) =>
+												v.routeId !== null &&
+												selectedStop.routeIds.includes(v.routeId),
+										)
+									: filteredVehicles
 					}
-					stops={filteredStops}
+					stops={tripFocus ? tripStops : filteredStops}
 					selectedStop={selectedStop}
 					trip={trip.data}
 					stopTrips={

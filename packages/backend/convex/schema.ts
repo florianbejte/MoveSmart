@@ -46,4 +46,11 @@ export default defineSchema({
 	})
 		.index("by_user", ["userId", "usedAt"])
 		.index("by_user_name", ["userId", "name"]),
+	// Green trips a user set off on, for their personal CO₂ savings.
+	greenTrips: defineTable({
+		userId: v.string(),
+		mode: v.string(),
+		co2Saved: v.number(),
+		at: v.number(),
+	}).index("by_user", ["userId", "at"]),
 });

@@ -236,3 +236,59 @@ select {
 	font-size: 12px;
 	min-height: 44px;
 }
+.travel-profile {
+	margin-top: 26px;
+	padding: 18px;
+	border-radius: 16px 16px 0 16px;
+	background: #f6f6f6;
+}
+.travel-profile-heading {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	color: var(--red);
+}
+.travel-profile-heading small {
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--slate);
+}
+.travel-profile-heading h2 {
+	margin: 0;
+	font-size: 19px;
+	font-weight: 800;
+	color: var(--ink);
+}
+.travel-profile dl {
+	margin: 14px 0 0;
+	display: grid;
+	gap: 8px;
+}
+.travel-profile dl div {
+	display: grid;
+	grid-template-columns: 110px 1fr;
+	gap: 10px;
+	font-size: 13px;
+}
+.travel-profile dt {
+	color: var(--slate);
+}
+.travel-profile dd {
+	margin: 0;
+	font-weight: 600;
+}
+.travel-profile-edit {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	margin-top: 16px;
+	min-height: 44px;
+	padding: 0 16px;
+	border: 1.5px solid var(--red);
+	border-radius: 10px 10px 0 10px;
+	background: white;
+	color: var(--red);
+	font-size: 13px;
+	font-weight: 800;
+	cursor: pointer;
+}

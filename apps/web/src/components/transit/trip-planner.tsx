@@ -1,16 +1,20 @@
 "use client";
 
 import {
+	ArrowLeft,
+	ArrowRight,
 	Bike,
 	BusFront,
 	Car,
 	CarTaxiFront,
 	ChevronDown,
-	Crosshair,
+	ExternalLink,
 	Footprints,
+	KeyRound,
 	Leaf,
 	LocateFixed,
 	MapPin,
+	Navigation,
 	Pencil,
 	Radio,
 	Search,
@@ -19,8 +23,10 @@ import {
 	Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { GeocodeHit } from "@/lib/plan/geocode";
 import {
 	estimateOptions,
+	kg,
 	type Mode,
 	type RankedOption,
 	rankOptions,
@@ -29,10 +35,12 @@ import {
 } from "@/lib/plan/options";
 import { sliceShape } from "@/lib/plan/paths";
 import { type Profile, persona, walkPace } from "@/lib/plan/profile";
+import { bookingLink, type Quote } from "@/lib/plan/providers";
 import type { TransitRide } from "@/lib/plan/transit";
 import { distance } from "@/lib/transit/core";
 import { serviceColor } from "@/lib/transit/service-colors";
 import type { Position, Stop, TransitRoute } from "@/lib/transit/types";
+import { useAccount } from "../account";
 import { useTransit } from "./use-transit";
 
 type Place = Position & { name: string };
@@ -41,6 +49,8 @@ export type PlanPath = {
 	key: string;
 	from: Position;
 	to: Position;
+	/** The ride being taken, so the map can show only that bus. */
+	ride?: { routeId: string; tripId: string; stopIds: string[] };
 	segments: {
 		kind: "walk" | "ride";
 		color: string;
@@ -54,6 +64,7 @@ const PATH_COLORS: Record<Mode, string> = {
 	transit: "#414454",
 	car: "#6b6b6b",
 	taxi: "#7e2324",
+	carshare: "#3d9a3a",
 };
 const PATH_PROFILE: Record<Mode, "foot" | "bike" | "car"> = {
 	walk: "foot",
@@ -62,6 +73,7 @@ const PATH_PROFILE: Record<Mode, "foot" | "bike" | "car"> = {
 	transit: "foot",
 	car: "car",
 	taxi: "car",
+	carshare: "car",
 };
 const pt = (p: Position) => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`;
 async function streetPath(
@@ -95,6 +107,7 @@ const ICONS: Record<Mode, typeof Bike> = {
 	transit: BusFront,
 	car: Car,
 	taxi: CarTaxiFront,
+	carshare: KeyRound,
 };
 const time = new Intl.DateTimeFormat("en-GB", {
 	timeZone: "Europe/Vilnius",
@@ -113,11 +126,11 @@ export function TripPlanner({
 	usingLocation,
 	locating,
 	onLocate,
-	center,
 	profile,
 	places,
 	onPlace,
 	onPath,
+	onStage,
 	onEditProfile,
 	now,
 }: {
@@ -128,24 +141,27 @@ export function TripPlanner({
 	usingLocation: boolean;
 	locating: boolean;
 	onLocate: () => void;
-	center: Position;
 	profile: Profile;
 	places: Place[];
 	onPlace: (place: Place) => void;
 	onPath: (path: PlanPath | null) => void;
+	/** "choose": destination and options, no map. "map": the chosen way, shown on the map. */
+	onStage: (stage: "choose" | "map") => void;
 	onEditProfile: () => void;
 	now: number;
 }) {
+	const account = useAccount();
 	const [query, setQuery] = useState("");
 	const [to, setTo] = useState<Place | null>(null);
 	// The start is fixed when the destination is chosen, so panning the map to the route
 	// doesn't re-plan the trip; a new location fix does.
 	const [start, setStart] = useState<Position>(origin);
-	const [chosen, setChosen] = useState<string | null>(null);
+	// The option the rider decided to go with; only then does the map open.
+	const [going, setGoing] = useState<string | null>(null);
 	function choose(place: Place) {
 		setTo(place);
 		setStart(origin);
-		setChosen(null);
+		setGoing(null);
 		onPlace(place);
 	}
 	// biome-ignore lint/correctness/useExhaustiveDependencies: only a new location fix should move the start.
@@ -160,8 +176,38 @@ export function TripPlanner({
 		return stops
 			.filter((s) => fold(s.name).includes(needle))
 			.filter((s) => !seen.has(s.name) && seen.add(s.name))
-			.slice(0, 6);
+			.slice(0, 3);
 	}, [stops, query]);
+	// Addresses and places, looked up after a short pause in typing.
+	const [lookup, setLookup] = useState<{
+		query: string;
+		hits: GeocodeHit[];
+		error?: boolean;
+	}>({ query: "", hits: [] });
+	useEffect(() => {
+		const q = query.trim();
+		if (q.length < 3) return;
+		const controller = new AbortController();
+		const timer = setTimeout(async () => {
+			try {
+				const response = await fetch(
+					`/api/geocode?q=${encodeURIComponent(q)}`,
+					{ signal: controller.signal },
+				);
+				if (!response.ok) throw new Error("Geocoding failed");
+				const { hits } = (await response.json()) as { hits: GeocodeHit[] };
+				setLookup({ query: q, hits });
+			} catch {
+				if (!controller.signal.aborted)
+					setLookup({ query: q, hits: [], error: true });
+			}
+		}, 300);
+		return () => {
+			clearTimeout(timer);
+			controller.abort();
+		};
+	}, [query]);
+	const searching = query.trim().length >= 3 && lookup.query !== query.trim();
 	const from = {
 		lat: Math.round(start.lat * 2000) / 2000,
 		lon: Math.round(start.lon * 2000) / 2000,
@@ -193,8 +239,10 @@ export function TripPlanner({
 	const weather = plan.data?.weather ?? null;
 	const wf = weatherFactor(weather, profile.weatherSensitive);
 	const tooClose = to && distance(start, to) < 150;
-	const selected =
-		usable.find((o) => o.id === chosen) ?? (tooClose ? undefined : usable[0]);
+	const selected = usable.find((o) => o.id === going);
+	const stage = selected && !hidden ? "map" : "choose";
+	// biome-ignore lint/correctness/useExhaustiveDependencies: onStage is a stable state setter.
+	useEffect(() => onStage(stage), [stage]);
 	const selectedKey = selected
 		? `${selected.id}:${pt(start)}:${to ? pt(to) : ""}`
 		: "";
@@ -231,6 +279,11 @@ export function TripPlanner({
 					key: selectedKey,
 					from: start,
 					to,
+					ride: {
+						routeId: ride.routeId,
+						tripId: ride.tripId,
+						stopIds: [ride.fromStopId, ride.toStopId],
+					},
 					segments: [
 						{ kind: "walk", color: PATH_COLORS.walk, coordinates: walkTo },
 						{
@@ -284,12 +337,29 @@ export function TripPlanner({
 				</span>
 				<Pencil size={13} />
 			</button>
+			<p className="impact-banner">
+				<Leaf size={15} />
+				{account.impact.trips > 0 ? (
+					<span>
+						You’ve saved <strong>{kg(account.impact.grams)} CO₂</strong> in{" "}
+						{account.impact.trips} green trip
+						{account.impact.trips === 1 ? "" : "s"}
+					</span>
+				) : (
+					<span>
+						Every bus, walk or bike trip instead of a car saves CO₂ — we’ll
+						count yours.
+					</span>
+				)}
+			</p>
 			<div className="plan-points">
 				<div className="plan-point">
 					<span className="point-dot from" />
 					<span className="point-text">
 						<small>From</small>
-						{usingLocation ? "My location" : "Map centre"}
+						{usingLocation
+							? "My location"
+							: "City centre · tap ⌖ for your location"}
 					</span>
 					<button
 						type="button"
@@ -313,6 +383,7 @@ export function TripPlanner({
 								onClick={() => {
 									setTo(null);
 									setQuery("");
+									setGoing(null);
 									onPath(null);
 								}}
 								aria-label="Change destination"
@@ -326,7 +397,7 @@ export function TripPlanner({
 							<input
 								value={query}
 								onChange={(e) => setQuery(e.target.value)}
-								placeholder="Where to? Try a stop name"
+								placeholder="Where to? Address, place or stop"
 								aria-label="Destination"
 							/>
 						</label>
@@ -348,23 +419,44 @@ export function TripPlanner({
 			)}
 			{!to && (
 				<div className="plan-suggestions">
+					{query.trim().length >= 3 &&
+						lookup.query === query.trim() &&
+						lookup.hits.map((h) => (
+							<button
+								type="button"
+								key={`${h.name}-${h.lat}-${h.lon}`}
+								onClick={() => choose({ name: h.name, lat: h.lat, lon: h.lon })}
+							>
+								<Navigation size={15} />
+								<span className="suggestion-text">
+									<span>{h.name}</span>
+									<small>
+										{[h.detail, h.kind].filter(Boolean).join(" · ")}
+									</small>
+								</span>
+							</button>
+						))}
+					{searching && (
+						<p className="loading-text">Searching addresses and places…</p>
+					)}
+					{lookup.error && lookup.query === query.trim() && (
+						<p className="helper-text">
+							Address search is unavailable right now — stops still work.
+						</p>
+					)}
 					{suggestions.map((s) => (
 						<button
 							type="button"
 							key={s.id}
 							onClick={() => choose({ name: s.name, lat: s.lat, lon: s.lon })}
 						>
-							<MapPin size={15} />
-							<span>{s.name}</span>
+							<BusFront size={15} />
+							<span className="suggestion-text">
+								<span>{s.name}</span>
+								<small>Stop</small>
+							</span>
 						</button>
 					))}
-					<button
-						type="button"
-						onClick={() => choose({ name: "Pinned on map", ...center })}
-					>
-						<Crosshair size={15} />
-						<span>Use the map centre as destination</span>
-					</button>
 					<p className="helper-text">
 						We compare walking, bikes, scooters, live buses, driving and taxis —
 						and rank them for you.
@@ -395,12 +487,22 @@ export function TripPlanner({
 							for you.
 						</p>
 					)}
+					{selected && (
+						<button
+							type="button"
+							className="back-to-options"
+							onClick={() => setGoing(null)}
+						>
+							<ArrowLeft size={15} />
+							All options
+						</button>
+					)}
 					<ol className="plan-options">
-						{usable.map((o, i) => (
+						{(selected ? [selected] : usable).map((o, i) => (
 							<OptionCard
 								key={o.id}
 								option={o}
-								best={i === 0}
+								best={i === 0 && !selected}
 								now={now}
 								routeColor={
 									o.ride
@@ -412,12 +514,16 @@ export function TripPlanner({
 										: undefined
 								}
 								ride={plan.data?.rides.find((r) => r.tripId === o.ride?.tripId)}
-								selected={o.id === selected?.id}
-								onSelect={() => setChosen(o.id)}
+								going={o.id === selected?.id}
+								onGo={() => {
+									setGoing(o.id);
+									if (o.green) account.logGreenTrip(o.mode, o.co2Saved);
+								}}
+								trip={{ from: start, to }}
 							/>
 						))}
 					</ol>
-					{excluded.length > 0 && (
+					{excluded.length > 0 && !selected && (
 						<div className="plan-excluded">
 							<button
 								type="button"
@@ -459,24 +565,33 @@ function OptionCard({
 	now,
 	routeColor,
 	ride,
-	selected,
-	onSelect,
+	going,
+	onGo,
+	trip,
 }: {
 	option: RankedOption;
 	best: boolean;
 	now: number;
 	routeColor?: string;
 	ride?: PlanResponse["rides"][number];
-	selected: boolean;
-	onSelect: () => void;
+	going: boolean;
+	onGo: () => void;
+	trip: { from: Position; to: Place };
 }) {
 	const Icon = ICONS[o.mode];
 	const leaveIn = Math.round((o.departAt - now) / 60_000);
+	const top = o.quotes?.find((q) => q.price !== null);
 	return (
-		<li
-			className={`plan-option ${best ? "best" : ""} ${selected ? "selected" : ""}`}
-		>
-			{best && <span className="best-tag">Best for you</span>}
+		<li className={`plan-option ${best ? "best" : ""} ${going ? "going" : ""}`}>
+			{best && (
+				<span className={`best-tag ${o.green ? "green" : ""}`}>
+					{o.promoted === "greener"
+						? "Greener way"
+						: o.green
+							? "Best for you & Vilnius"
+							: "Best for you"}
+				</span>
+			)}
 			<div className="plan-option-main">
 				<span
 					className={`mode-icon mode-${o.mode}`}
@@ -519,29 +634,128 @@ function OptionCard({
 				{o.parts.wait > 0 && o.mode !== "transit" && (
 					<span>{o.parts.wait} min wait</span>
 				)}
-				<span>{o.cost === 0 ? "Free" : `€${o.cost.toFixed(2)}`}</span>
 				<span>
-					<Leaf size={11} />
-					{o.co2 === 0
-						? "0 g CO₂"
-						: `${o.co2 >= 1000 ? `${(o.co2 / 1000).toFixed(1)} kg` : `${o.co2} g`} CO₂`}
+					{o.cost === 0
+						? "Free"
+						: `${o.quotes ? "from " : ""}€${(top?.price ?? o.cost).toFixed(2)}`}
 				</span>
+				{o.green && o.co2Saved >= 50 ? (
+					<span className="co2-good">
+						<Leaf size={11} />
+						Saves {kg(o.co2Saved)} CO₂
+					</span>
+				) : (
+					<span
+						className={
+							["car", "taxi", "carshare"].includes(o.mode) && o.co2 > 0
+								? "co2-bad"
+								: ""
+						}
+					>
+						<Leaf size={11} />
+						{kg(o.co2)} CO₂
+					</span>
+				)}
 			</div>
 			{o.reasons.length > 0 && (
 				<ul className="plan-reasons">
-					{o.reasons.slice(0, best ? 4 : 2).map((r) => (
+					{o.reasons.slice(0, best || going ? 4 : 2).map((r) => (
 						<li key={r}>{r}</li>
 					))}
 				</ul>
 			)}
-			<button
-				type="button"
-				className="option-select"
-				aria-pressed={selected}
-				onClick={onSelect}
-			>
-				{selected ? "Shown on the map" : "Show on the map"}
-			</button>
+			{going && o.green && o.co2Saved >= 50 && (
+				<p className="impact-thanks">
+					<Leaf size={15} />
+					Nice choice — this trip keeps {kg(o.co2Saved)} of CO₂ out of Vilnius
+					air. Added to your savings.
+				</p>
+			)}
+			{going && !o.green && o.co2 > 0 && (
+				<p className="impact-nudge">
+					<Leaf size={15} />
+					This trip emits {kg(o.co2)} CO₂. Next time, try the bus — it’s part of
+					how Vilnius gets cleaner.
+				</p>
+			)}
+			{o.quotes && going && (
+				<Providers quotes={o.quotes} mode={o.mode} trip={trip} />
+			)}
+			{!going && (
+				<button type="button" className="option-select" onClick={onGo}>
+					Go this way
+					<ArrowRight size={15} />
+				</button>
+			)}
 		</li>
+	);
+}
+
+/** Side-by-side taxi or car-sharing apps for this trip, recommended one first. */
+function Providers({
+	quotes,
+	mode,
+	trip,
+}: {
+	quotes: Quote[];
+	mode: Mode;
+	trip: { from: Position; to: Place };
+}) {
+	return (
+		<div className="providers">
+			<h4>
+				{mode === "taxi" ? "Compare taxi apps" : "Compare car-sharing services"}
+			</h4>
+			<ol>
+				{quotes.map((q, i) => {
+					const link = q.url ? bookingLink(q, trip.from, trip.to) : "";
+					return (
+						<li key={q.id} className={i === 0 ? "recommended" : ""}>
+							<div className="provider-main">
+								<span className="provider-name">
+									{i === 0 && <span className="provider-pick">Best pick</span>}
+									<strong>{q.name}</strong>
+									<small>
+										{mode === "taxi"
+											? `Pickup in ~${q.reach} min`
+											: `Nearest car ~${q.reach} min walk`}
+										{q.note ? ` · ${q.note}` : ""}
+									</small>
+								</span>
+								<span className="provider-price">
+									{q.price === null
+										? "Price in app"
+										: q.priceHigh
+											? `€${q.price.toFixed(2)}–${q.priceHigh.toFixed(2)}`
+											: `~€${q.price.toFixed(2)}`}
+								</span>
+							</div>
+							<div className="provider-badges">
+								{q.badges.map((b) => (
+									<span key={b} className={b.startsWith("Surge") ? "warn" : ""}>
+										{b}
+									</span>
+								))}
+							</div>
+							{link && (
+								<a
+									className="provider-open"
+									href={link}
+									target="_blank"
+									rel="noreferrer"
+								>
+									Open {q.name.split(" ")[0]}
+									<ExternalLink size={13} />
+								</a>
+							)}
+						</li>
+					);
+				})}
+			</ol>
+			<p className="helper-text">
+				Estimates from published tariffs; each app shows the exact price before
+				you book.
+			</p>
+		</div>
 	);
 }

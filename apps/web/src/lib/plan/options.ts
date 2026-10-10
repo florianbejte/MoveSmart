@@ -1,9 +1,17 @@
 import { distance } from "../transit/core";
 import type { Position } from "../transit/types";
 import { type Profile, stepFree, walkPace } from "./profile";
+import { type Quote, quote } from "./providers";
 import type { TransitRide } from "./transit";
 
-export type Mode = "walk" | "bike" | "scooter" | "transit" | "car" | "taxi";
+export type Mode =
+	| "walk"
+	| "bike"
+	| "scooter"
+	| "transit"
+	| "car"
+	| "taxi"
+	| "carshare";
 export type Weather = {
 	temperature: number;
 	feelsLike: number;
@@ -24,13 +32,27 @@ export type TripOption = {
 	arriveAt: number;
 	estimated: boolean;
 	ride?: TransitRide;
+	/** Taxi and car-sharing providers, best first for this rider. */
+	quotes?: Quote[];
 	notes: string[];
 };
 export type RankedOption = TripOption & {
 	score: number;
 	reasons: string[];
 	excluded?: string;
+	/** Public transport, walking or cycling. */
+	green: boolean;
+	/** Grams of CO₂ avoided compared with driving the same trip. */
+	co2Saved: number;
+	/**
+	 * Put ahead of a faster car-based option for the city's sake: "best" when the
+	 * extra time is reasonable, "greener" when it's a real trade-off we still lead with.
+	 */
+	promoted?: "best" | "greener";
 };
+
+export const GREEN_MODES: Mode[] = ["transit", "walk", "bike"];
+const CAR_MODES: Mode[] = ["car", "taxi", "carshare"];
 
 // Vilnius approximations; see notes shown with each option.
 const CENTRE = { lat: 54.6872, lon: 25.2797 };
@@ -231,16 +253,54 @@ export function estimateOptions(input: {
 				...(central ? ["Paid parking zone; time to find a spot"] : []),
 			],
 		}),
-		option({
-			id: "taxi",
-			mode: "taxi",
-			label: "Taxi / ride-hailing",
-			parts: { walk: 0, wait: 5, ride: driveMin, park: 0 },
-			cost: round(Math.max(3.5, 1.5 + 0.65 * road)),
-			co2: Math.round(road * CAR_CO2_KM),
-			estimated: true,
-			notes: ["Fare is approximate"],
-		}),
+		(() => {
+			const quotes = quote(
+				"taxi",
+				{ km: road, minutes: driveMin, rush },
+				profile.priorities,
+			);
+			const best = quotes.find((q) => q.price !== null);
+			return {
+				...option({
+					id: "taxi",
+					mode: "taxi",
+					label: best ? `Taxi · ${best.name}` : "Taxi",
+					parts: { walk: 0, wait: best?.reach ?? 5, ride: driveMin, park: 0 },
+					cost: best?.priceHigh ?? best?.price ?? round(1 + 0.8 * road),
+					co2: Math.round(road * CAR_CO2_KM),
+					estimated: true,
+					notes: [`${quotes.length} apps compared`],
+				}),
+				quotes,
+			};
+		})(),
+		(() => {
+			// Car sharing: walk to the car, drive, park anywhere in the city zone.
+			const quotes = quote(
+				"carshare",
+				{ km: road, minutes: driveMin + 2, rush },
+				profile.priorities,
+			);
+			const best = quotes.find((q) => q.price !== null);
+			return {
+				...option({
+					id: "carshare",
+					mode: "carshare",
+					label: best ? `Car sharing · ${best.name}` : "Car sharing",
+					parts: {
+						walk: best?.reach ?? 6,
+						wait: 0,
+						ride: driveMin,
+						park: 2,
+					},
+					cost: best?.price ?? round(0.15 * (driveMin + 2) + 0.3 * road),
+					co2: best?.electric ? 0 : Math.round(road * CAR_CO2_KM),
+					estimated: true,
+					notes: [`${quotes.length} services compared`],
+				}),
+				quotes,
+			};
+		})(),
 	);
 	return options;
 }
@@ -260,8 +320,14 @@ export function rankOptions(
 		comfort *
 		(profile.needs.includes("luggage") ? 1.5 : 1) *
 		(stepFree(profile) ? 1.4 : 1);
-	const perEuro = p.has("cost") ? 7 : 2;
-	const perKg = p.has("eco") ? 25 : 3;
+	// Minutes one euro is worth: about €5/h of time for cost-focused riders.
+	const perEuro = p.has("cost") ? 12 : 2;
+	// MoveSmart's mission: CO₂ always counts, and more for riders who chose "greenest".
+	const perKg = p.has("eco") ? 25 : 12;
+	const driving =
+		options.find((o) => o.mode === "car")?.co2 ??
+		options.find((o) => o.mode === "taxi")?.co2 ??
+		0;
 	const ranked = options.map((o): RankedOption => {
 		const excluded = exclusion(o, profile, icy);
 		const outdoor =
@@ -283,7 +349,16 @@ export function rankOptions(
 		if ((o.mode === "bike" || o.mode === "scooter") && p.has("comfort"))
 			score += 4;
 		if ((o.mode === "walk" || o.mode === "bike") && p.has("eco")) score -= 3;
-		return { ...o, score: Math.round(score), reasons: [], excluded };
+		// Congestion, parking and street space: cars cost the city more than their CO₂.
+		if (CAR_MODES.includes(o.mode)) score += o.co2 === 0 ? 3 : 6;
+		return {
+			...o,
+			score: Math.round(score),
+			reasons: [],
+			excluded,
+			green: GREEN_MODES.includes(o.mode),
+			co2Saved: Math.max(0, driving - o.co2),
+		};
 	});
 	const usable = ranked
 		.filter((o) => !o.excluded)
@@ -292,6 +367,17 @@ export function rankOptions(
 	// Keep only the best public transport ride plus one alternative so modes stay comparable.
 	let rides = 0;
 	const shown = usable.filter((o) => o.mode !== "transit" || rides++ < 2);
+	// Green first, always: the best green option leads whenever a car would otherwise win.
+	const top = shown[0];
+	const green = shown.find((o) => o.green);
+	if (top && green && CAR_MODES.includes(top.mode)) {
+		const reasonable =
+			green.minutes <= Math.max(top.minutes * 2, top.minutes + 15) &&
+			green.minutes <= top.minutes + 30;
+		green.promoted = reasonable ? "best" : "greener";
+		shown.splice(shown.indexOf(green), 1);
+		shown.unshift(green);
+	}
 	for (const o of shown) o.reasons = explain(o, shown, profile, w.reasons);
 	return [...shown, ...rest];
 }
@@ -299,6 +385,10 @@ export function rankOptions(
 function exclusion(o: TripOption, profile: Profile, icy: boolean) {
 	const needs = new Set(profile.needs);
 	if (o.mode === "car" && !profile.hasCar) return "You don’t have a car";
+	if (o.mode === "carshare") {
+		if (!profile.sharedOk) return "You prefer not to use shared vehicles";
+		if (needs.has("wheelchair")) return "Shared cars aren’t adapted";
+	}
 	if (o.mode === "bike" || o.mode === "scooter") {
 		if (needs.has("wheelchair")) return "Not step-free";
 		if (needs.has("stroller") || needs.has("luggage"))
@@ -324,6 +414,22 @@ function explain(
 ) {
 	const reasons: string[] = [];
 	const others = all.filter((x) => x.id !== o.id);
+	if (o.promoted) {
+		const car = all.find((x) => CAR_MODES.includes(x.mode));
+		const extra = car ? o.minutes - car.minutes : 0;
+		reasons.push(
+			extra <= 0
+				? "Greener choice for Vilnius"
+				: o.promoted === "best"
+					? `Greener choice — only ${extra} min longer than by car`
+					: `Greener way — ${extra} min longer, saves ${kg(o.co2Saved)} CO₂`,
+		);
+	}
+	if (o.green && o.co2Saved >= 50 && o.promoted !== "greener")
+		reasons.push(`Saves ${kg(o.co2Saved)} CO₂ vs. driving`);
+	const bus = all.find((x) => x.mode === "transit" && x.co2 > 0);
+	if (CAR_MODES.includes(o.mode) && bus && o.co2 >= bus.co2 * 2)
+		reasons.push(`${Math.round(o.co2 / bus.co2)}× the CO₂ of the bus`);
 	if (others.every((x) => o.minutes <= x.minutes))
 		reasons.push("Fastest door to door");
 	if (others.every((x) => o.cost <= x.cost))
@@ -347,10 +453,10 @@ function explain(
 		(o.mode === "walk" || o.mode === "bike" || o.mode === "scooter")
 	)
 		reasons.push(`Outdoors in ${weather.join(", ")}`);
-	if (
-		weather.length &&
-		(o.mode === "car" || o.mode === "taxi" || o.mode === "transit")
-	)
+	if (weather.length && ["car", "taxi", "carshare", "transit"].includes(o.mode))
 		reasons.push(`Sheltered from the ${weather[0]}`);
 	return reasons;
 }
+
+export const kg = (grams: number) =>
+	grams >= 1000 ? `${(grams / 1000).toFixed(1)} kg` : `${Math.round(grams)} g`;
