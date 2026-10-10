@@ -234,6 +234,16 @@ export default function TransitExplorer() {
 			? `/api/transit?kind=stop&id=${encodeURIComponent(selection.id)}`
 			: null,
 	);
+	const stopRoutes = useTransit<{
+		stopId: string;
+		trips: TripDetail[];
+		stale: boolean;
+	}>(
+		selectedStop
+			? `/api/transit?kind=stop-routes&id=${encodeURIComponent(selectedStop.id)}`
+			: null,
+		300000,
+	);
 	const needle = normalise(query.trim());
 	const filteredVehicles = useMemo(
 		() =>
@@ -728,6 +738,20 @@ export default function TransitExplorer() {
 										unavailable={!!reports.error}
 									/>
 								)}
+								{selectedStop && (
+									<p className="helper-text" role="status">
+										{stopRoutes.error
+											? "Route outlines unavailable. Try again."
+											: !stopRoutes.data
+												? "Loading routes from this stop…"
+												: `${stopRoutes.data.stale ? "Cached timetable · " : ""}Showing routes from this platform. Check departures for service times.`}
+										{stopRoutes.error && (
+											<button type="button" onClick={stopRoutes.retry}>
+												Retry
+											</button>
+										)}
+									</p>
+								)}
 								<div className="stop-route-list">
 									{selectedStop?.routeIds.map((id) => (
 										<RouteBadge key={id} route={routeById.get(id)} />
@@ -1178,11 +1202,20 @@ export default function TransitExplorer() {
 										: v.route === selectedVehicle.route &&
 											v.mode === selectedVehicle.mode,
 								)
-							: filteredVehicles
+							: selectedStop
+								? vehicles.filter(
+										(v) =>
+											v.routeId !== null &&
+											selectedStop.routeIds.includes(v.routeId),
+									)
+								: filteredVehicles
 					}
 					stops={filteredStops}
 					selectedStop={selectedStop}
 					trip={trip.data}
+					stopTrips={
+						selectedStop && !previewTrip ? stopRoutes.data?.trips : undefined
+					}
 					selectedId={selection?.id}
 					location={location}
 					focus={focus}

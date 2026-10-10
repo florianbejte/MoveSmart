@@ -325,6 +325,57 @@ export async function getTrip(id: string): Promise<TripDetail | null> {
 		}),
 	};
 }
+/** All published boarding patterns at this exact platform, not a promise of service now. */
+export async function getStopRoutes(id: string) {
+	const data = await getSchedule();
+	if (!data.stops.has(id)) return null;
+	const seen = new Set<string>();
+	const trips: TripDetail[] = [];
+	for (const visit of data.stopTimes.get(id) ?? []) {
+		if (!visit.pickup) continue;
+		const row = data.trips.get(visit.tripId);
+		if (!row) continue;
+		const times = data.tripStops.get(visit.tripId) ?? [];
+		const index = times.findIndex((t) => t.sequence === visit.sequence);
+		if (index < 0 || index === times.length - 1) continue;
+		const onward = times.slice(index);
+		const key = JSON.stringify([
+			row.route_id,
+			row.shape_id,
+			onward.map((t) => t.stopId),
+		]);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		const shape = data.shapes.get(row.shape_id) ?? [];
+		// Match preceding stops in sequence so loop routes do not restart at an earlier visit.
+		let cursor = 0;
+		for (const time of times.slice(0, index + 1)) {
+			const stop = data.stops.get(time.stopId);
+			if (!stop) continue;
+			let nearest = cursor;
+			let best = Number.POSITIVE_INFINITY;
+			for (let i = cursor; i < shape.length; i++) {
+				const d = (shape[i][0] - stop.lon) ** 2 + (shape[i][1] - stop.lat) ** 2;
+				if (d < best) {
+					best = d;
+					nearest = i;
+				}
+			}
+			cursor = nearest;
+		}
+		trips.push({
+			id: visit.tripId,
+			routeId: row.route_id,
+			destination: row.trip_headsign || row.direction_name,
+			coordinates: shape.slice(cursor),
+			stops: onward.flatMap((t) => {
+				const stop = data.stops.get(t.stopId);
+				return stop ? [stop] : [];
+			}),
+		});
+	}
+	return { stopId: id, trips, stale: data.network.stale };
+}
 /** Direct rides between two points in the next 90 minutes, using live delays where vehicles report them. */
 export async function getRides(from: Position, to: Position, walkPace = 75) {
 	const [data, feed] = await Promise.all([

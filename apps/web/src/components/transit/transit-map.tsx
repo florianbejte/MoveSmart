@@ -35,6 +35,7 @@ type Props = {
 	stops: Stop[];
 	selectedStop?: Stop;
 	trip?: TripDetail;
+	stopTrips?: TripDetail[];
 	tripColor: string;
 	routes: TransitRoute[];
 	selectedId?: string;
@@ -333,6 +334,24 @@ export default function TransitMap(props: Props) {
 				paint: {
 					"line-color": ["get", "color"],
 					"line-width": 5,
+					"line-opacity": 0.85,
+				},
+			});
+			instance.addSource("stop-routes", { type: "geojson", data: EMPTY_PLAN });
+			instance.addLayer({
+				id: "stop-routes-outline",
+				type: "line",
+				source: "stop-routes",
+				paint: { "line-color": "#fff", "line-width": 7, "line-opacity": 0.85 },
+			});
+			instance.addLayer({
+				id: "stop-routes-lines",
+				type: "line",
+				source: "stop-routes",
+				layout: { "line-cap": "round", "line-join": "round" },
+				paint: {
+					"line-color": ["get", "color"],
+					"line-width": 4,
 					"line-opacity": 0.85,
 				},
 			});
@@ -680,6 +699,26 @@ export default function TransitMap(props: Props) {
 					: [],
 		});
 	}, [ready, props.trip, props.tripColor]);
+	useEffect(() => {
+		if (!ready || !map.current) return;
+		(map.current.getSource("stop-routes") as maplibregl.GeoJSONSource)?.setData(
+			{
+				type: "FeatureCollection",
+				features: (props.stopTrips ?? [])
+					.filter((t) => t.coordinates.length > 1)
+					.map((t) => {
+						const r = props.routes.find((r) => r.id === t.routeId);
+						return {
+							type: "Feature",
+							properties: {
+								color: serviceColor(r?.name ?? "", r?.mode, r?.color),
+							},
+							geometry: { type: "LineString", coordinates: t.coordinates },
+						};
+					}),
+			},
+		);
+	}, [ready, props.stopTrips, props.routes]);
 	useEffect(() => {
 		if (!ready || !map.current) return;
 		const ids = new Set(props.vehicles.map((v) => v.id));

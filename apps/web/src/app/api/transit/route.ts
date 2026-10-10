@@ -2,6 +2,7 @@ import {
 	getEnrichedLive,
 	getSchedule,
 	getStopBoard,
+	getStopRoutes,
 	getTrip,
 } from "@/lib/transit/server";
 
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
 		if (kind === "network") result = (await getSchedule()).network;
 		else if (kind === "vehicles") result = await getEnrichedLive();
 		else if (kind === "stop" && id) result = await getStopBoard(id);
+		else if (kind === "stop-routes" && id) result = await getStopRoutes(id);
 		else if (kind === "trip" && id) result = await getTrip(id);
 		else
 			return Response.json(

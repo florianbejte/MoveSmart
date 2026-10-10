@@ -6,6 +6,7 @@ import {
 	getLive,
 	getSchedule,
 	getStopBoard,
+	getStopRoutes,
 	getTrip,
 } from "./server";
 
@@ -71,6 +72,16 @@ test("end-to-end timetable joins, midnight departures, shared cache and outage f
 		);
 		assert.equal(board.departures[1].live, true);
 		assert.equal(board.departures[0].live, false);
+		const outlines = await getStopRoutes("s1");
+		assert.ok(outlines);
+		assert.equal(outlines.trips.length, 1);
+		assert.equal(outlines.trips[0].stops[0].id, "s1");
+		assert.deepEqual(outlines.trips[0].coordinates, [
+			[25.27, 54.68],
+			[25.28, 54.69],
+		]);
+		assert.equal((await getStopRoutes("s2"))?.trips.length, 0);
+		assert.equal(await getStopRoutes("missing"), null);
 		const trip = await getTrip("live");
 		assert.deepEqual(trip?.coordinates, [
 			[25.27, 54.68],
