@@ -1,4 +1,5 @@
 "use client";
+
 import {
 	BusFront,
 	Check,
@@ -11,6 +12,8 @@ import {
 	X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { dateLocale } from "@/lib/i18n/core";
+import { useT } from "@/lib/i18n/react";
 import { reportForDeparture } from "@/lib/reports/departures";
 
 export { reportForDeparture };
@@ -33,11 +36,15 @@ export function DepartureCrowding({
 	report?: CrowdingSummary;
 	now: number;
 }) {
+	const t = useT();
+
 	const item = CROWDING.find((c) => c.id === report?.level);
 	return item && report ? (
 		<small className="departure-crowding" style={{ color: item.color }}>
-			Community · {item.label} ·{" "}
-			{Math.max(1, Math.floor((now - report.updatedAt) / 60000))}m ago
+			{t("Community · ")}
+			{t(item.label)} ·{t(" ")}
+			{t(Math.max(1, Math.floor((now - report.updatedAt) / 60000)))}
+			{t("m ago")}
 		</small>
 	) : null;
 }
@@ -52,6 +59,8 @@ export function ConfirmReport({
 	label?: string;
 	disabled?: boolean;
 }) {
+	const t = useT();
+
 	const [pending, setPending] = useState(false);
 	const [message, setMessage] = useState("");
 	return (
@@ -74,9 +83,9 @@ export function ConfirmReport({
 				}}
 			>
 				<ThumbsUp size={14} />
-				{pending ? "Saving…" : label}
+				{t(pending ? "Saving…" : label)}
 			</button>
-			{message && <p role="status">{message}</p>}
+			{message && <p role="status">{t(message)}</p>}
 		</div>
 	);
 }
@@ -95,45 +104,56 @@ export function StopCommunity({
 	onRefresh: () => void;
 	unavailable: boolean;
 }) {
+	const t = useT();
+
 	const active = issues.filter(
 		(r) => r.stopId === stop.id && r.expiresAt > now,
 	);
 	return (
-		<section className="stop-community" aria-label="Community stop reports">
+		<section
+			className="stop-community"
+			aria-label={t("Community stop reports")}
+		>
 			<div className="community-section-title">
-				<strong>From the community</strong>
+				<strong>{t("From the community")}</strong>
 				<button type="button" onClick={onReport}>
-					Report an issue
+					{t("Report an issue")}
 				</button>
 			</div>
 			{unavailable ? (
-				<p>Reports are temporarily unavailable.</p>
+				<p>{t("Reports are temporarily unavailable.")}</p>
 			) : active.length === 0 ? (
-				<p>No recent stop reports.</p>
+				<p>{t("No recent stop reports.")}</p>
 			) : (
 				active.map((r) => (
 					<article key={r.id}>
 						<strong>
-							{STOP_ISSUES.find((x) => x.id === r.kind)?.label}
-							{r.route ? ` · Route ${r.route}` : ""}
+							{t(STOP_ISSUES.find((x) => x.id === r.kind)?.label)}
+							{t(r.route ? ` · Route ${r.route}` : "")}
 						</strong>
 						<small>
-							{Math.max(1, Math.floor((now - r.updatedAt) / 60000))} min ago ·{" "}
-							{r.count} {r.count === 1 ? "report" : "reports"} · expires{" "}
-							{new Date(r.expiresAt).toLocaleTimeString("en-GB", {
-								timeZone: "Europe/Vilnius",
-								hour: "2-digit",
-								minute: "2-digit",
-							})}
+							{t(Math.max(1, Math.floor((now - r.updatedAt) / 60000)))}
+							{t(" min ago ·")}
+							{t(" ")}
+							{t(r.count)} {t(r.count === 1 ? "report" : "reports")}
+							{t(" · expires")}
+							{t(" ")}
+							{t(
+								new Date(r.expiresAt).toLocaleTimeString(dateLocale(), {
+									timeZone: "Europe/Vilnius",
+									hour: "2-digit",
+									minute: "2-digit",
+								}),
+							)}
 						</small>
 						<ConfirmReport
 							body={{ confirmId: r.id }}
 							onDone={onRefresh}
-							label={
+							label={t(
 								r.kind.startsWith("passed-")
 									? "I saw this too"
-									: "Still accurate"
-							}
+									: "Still accurate",
+							)}
 						/>
 					</article>
 				))
@@ -154,6 +174,8 @@ export function StopReportDialog({
 	onClose: () => void;
 	onSent: () => void;
 }) {
+	const t = useT();
+
 	const dialog = useRef<HTMLDialogElement>(null);
 	const [kind, setKind] = useState<StopIssueKind | null>(null);
 	const [vehicleId, setVehicleId] = useState("");
@@ -195,10 +217,13 @@ export function StopReportDialog({
 			}}
 		>
 			<header className="report-header">
-				<span>Community report · Stop {stop.id}</span>
+				<span>
+					{t("Community report · Stop ")}
+					{t(stop.id)}
+				</span>
 				<button
 					type="button"
-					aria-label="Close stop report"
+					aria-label={t("Close stop report")}
 					disabled={pending}
 					onClick={onClose}
 				>
@@ -207,23 +232,27 @@ export function StopReportDialog({
 			</header>
 			<div className="report-body">
 				<h2 id="stop-report-title">
-					{sent
-						? "Thanks for helping."
-						: reviewing
-							? "Ready to share?"
-							: "What happened here?"}
+					{t(
+						sent
+							? "Thanks for helping."
+							: reviewing
+								? "Ready to share?"
+								: "What happened here?",
+					)}
 				</h2>
 				<p className="report-intro">
-					{stop.name} · {stop.description}
+					{t(stop.name)} · {t(stop.description)}
 				</p>
 				{sent ? (
-					<p role="status">Your report is now shared with other riders.</p>
+					<p role="status">
+						{t("Your report is now shared with other riders.")}
+					</p>
 				) : (
 					<>
 						<fieldset
 							hidden={reviewing}
 							className="stop-issue-choices"
-							aria-label="Issue type"
+							aria-label={t("Issue type")}
 						>
 							{STOP_ISSUES.map((item, index) => {
 								const Icon = icons[index];
@@ -236,7 +265,7 @@ export function StopReportDialog({
 										onClick={() => setKind(item.id)}
 									>
 										<Icon size={25} />
-										<strong>{item.label}</strong>
+										<strong>{t(item.label)}</strong>
 									</button>
 								);
 							})}
@@ -244,12 +273,15 @@ export function StopReportDialog({
 						{reviewing && (
 							<div className="report-review">
 								<strong>
-									{STOP_ISSUES.find((item) => item.id === kind)?.label}
+									{t(STOP_ISSUES.find((item) => item.id === kind)?.label)}
 								</strong>
-								<p>{stop.name}</p>
+								<p>{t(stop.name)}</p>
 								{vehicle && (
 									<p>
-										Route {vehicle.route} · Vehicle {vehicle.number}
+										{t("Route ")}
+										{t(vehicle.route)}
+										{t(" · Vehicle ")}
+										{t(vehicle.number)}
 									</p>
 								)}
 								<button
@@ -258,45 +290,53 @@ export function StopReportDialog({
 									disabled={pending}
 									onClick={() => setReviewing(false)}
 								>
-									Change report
+									{t("Change report")}
 								</button>
 							</div>
 						)}
 						{passed && !reviewing && (
 							<label className="passed-vehicle">
-								Which bus passed this stop?
+								{t("Which bus passed this stop?")}
 								<select
 									value={vehicleId}
 									onChange={(e) => setVehicleId(e.target.value)}
 									disabled={pending}
 								>
-									<option value="">Choose the vehicle</option>
+									<option value="">{t("Choose the vehicle")}</option>
 									{candidates.map((v) => (
 										<option key={v.id} value={v.id}>
-											{v.route} → {v.destination} · Vehicle {v.number}
+											{t(v.route)} → {t(v.destination)}
+											{t(" · Vehicle ")}
+											{t(v.number)}
 										</option>
 									))}
 								</select>
 								<small>
-									Live buses serving this route within 1 km. The exact trip and
-									platform are checked when you send.
+									{t(
+										"Live buses serving this route within 1 km. The exact trip and platform are checked when you send.",
+									)}
 								</small>
 								{!candidates.length && (
-									<p>No eligible buses nearby right now.</p>
+									<p>{t("No eligible buses nearby right now.")}</p>
 								)}
 							</label>
 						)}
 						<p className="report-context">
-							{passed
-								? "Bus-passed reports expire after 30 minutes."
-								: "Stop issues expire after 24 hours unless confirmed again."}{" "}
-							This is a community observation, not an official service alert.
+							{t(
+								passed
+									? "Bus-passed reports expire after 30 minutes."
+									: "Stop issues expire after 24 hours unless confirmed again.",
+							)}
+							{t(" ")}
+							{t(
+								"This is a community observation, not an official service alert.",
+							)}
 						</p>
 					</>
 				)}
 				{message && (
 					<p className="report-error" role="alert">
-						{message}
+						{t(message)}
 					</p>
 				)}
 			</div>
@@ -332,13 +372,15 @@ export function StopReportDialog({
 						}
 					}}
 				>
-					{pending
-						? "Sending…"
-						: sent
-							? "Done"
-							: reviewing
-								? "Send report"
-								: "Review report"}
+					{t(
+						pending
+							? "Sending…"
+							: sent
+								? "Done"
+								: reviewing
+									? "Send report"
+									: "Review report",
+					)}
 					<Check size={18} />
 				</button>
 			</footer>
@@ -406,6 +448,8 @@ export function FavouriteButton({
 	onClick: () => void;
 	label: string;
 }) {
+	const t = useT();
+
 	return (
 		<button
 			className="favourite-button"
@@ -414,7 +458,7 @@ export function FavouriteButton({
 			onClick={onClick}
 		>
 			<Star size={16} fill={active ? "currentColor" : "none"} />
-			{active ? "Saved" : "Save"} {label}
+			{t(`${active ? "Saved" : "Save"} ${label}`)}
 		</button>
 	);
 }
@@ -435,17 +479,24 @@ export function SavedPanel({
 	onRemove: (type: keyof Saved, id: string) => void;
 	onExplore: () => void;
 }) {
+	const t = useT();
+
 	return (
-		<section className="saved-panel" aria-label="Favourite stops and routes">
-			<h2>Your shortcuts</h2>
-			<p>Saved on this browser.</p>
+		<section
+			className="saved-panel"
+			aria-label={t("Favourite stops and routes")}
+		>
+			<h2>{t("Your shortcuts")}</h2>
+			<p>{t("Saved on this browser.")}</p>
 			{!saved.stops.length && !saved.routes.length && (
 				<div className="saved-empty">
 					<Star size={36} />
-					<h3>Keep your everyday stops close</h3>
-					<p>Tap the star on a stop or route to find it here next time.</p>
+					<h3>{t("Keep your everyday stops close")}</h3>
+					<p>
+						{t("Tap the star on a stop or route to find it here next time.")}
+					</p>
 					<button type="button" className="report-submit" onClick={onExplore}>
-						Find nearby stops
+						{t("Find nearby stops")}
 					</button>
 				</div>
 			)}
@@ -454,7 +505,8 @@ export function SavedPanel({
 				.map((type) => (
 					<div key={type}>
 						<h3>
-							{type === "stops" ? "Stops" : "Routes"} · {saved[type].length}
+							{t(type === "stops" ? "Stops" : "Routes")} ·{t(" ")}
+							{t(saved[type].length)}
 						</h3>
 						{saved[type].map((id) => {
 							const item =
@@ -477,19 +529,21 @@ export function SavedPanel({
 										)}
 										<span>
 											<strong>
-												{item?.name ?? "Unavailable in current feed"}
+												{t(item?.name ?? "Unavailable in current feed")}
 											</strong>
 											<small>
-												{item &&
-													("description" in item
-														? item.description
-														: item.title)}
+												{t(
+													item &&
+														("description" in item
+															? item.description
+															: item.title),
+												)}
 											</small>
 										</span>
 									</button>
 									<button
 										type="button"
-										aria-label={`Remove ${item?.name ?? id} from favourites`}
+										aria-label={t(`Remove ${item?.name ?? id} from favourites`)}
 										onClick={() => onRemove(type, id)}
 									>
 										<X size={16} />

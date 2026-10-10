@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@MoveSmart/ui/components/button";
 import { Input } from "@MoveSmart/ui/components/input";
 import { Label } from "@MoveSmart/ui/components/label";
@@ -6,14 +8,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import z from "zod";
-
 import { authClient } from "@/lib/auth-client";
+import { useT } from "@/lib/i18n/react";
 
 export default function SignUpForm({
 	onSwitchToSignIn,
 }: {
 	onSwitchToSignIn: () => void;
 }) {
+	const t = useT();
+
 	const router = useRouter();
 
 	const form = useForm({
@@ -32,10 +36,14 @@ export default function SignUpForm({
 				{
 					onSuccess: () => {
 						router.push("/");
-						toast.success("Account created. Now tell us how you travel.");
+						toast.success(t("Account created. Now tell us how you travel."));
 					},
-					onError: (error) => {
-						toast.error(error.error.message || error.error.statusText);
+					onError: () => {
+						toast.error(
+							t(
+								"Unable to create your account. Check your details and try again.",
+							),
+						);
 					},
 				},
 			);
@@ -52,9 +60,9 @@ export default function SignUpForm({
 	return (
 		<div className="account-panel account-form">
 			<Link className="account-map-link" href="/">
-				← Back to map
+				{t("← Back to map")}
 			</Link>
-			<h1>Create an account.</h1>
+			<h1>{t("Create an account.")}</h1>
 
 			<form
 				onSubmit={(e) => {
@@ -68,7 +76,7 @@ export default function SignUpForm({
 					<form.Field name="name">
 						{(field) => (
 							<div className="space-y-2">
-								<Label htmlFor={field.name}>Name</Label>
+								<Label htmlFor={field.name}>{t("Name")}</Label>
 								<Input
 									id={field.name}
 									name={field.name}
@@ -78,7 +86,7 @@ export default function SignUpForm({
 								/>
 								{field.state.meta.errors.map((error) => (
 									<p key={error?.message} className="text-red-500">
-										{error?.message}
+										{t(error?.message)}
 									</p>
 								))}
 							</div>
@@ -90,7 +98,7 @@ export default function SignUpForm({
 					<form.Field name="email">
 						{(field) => (
 							<div className="space-y-2">
-								<Label htmlFor={field.name}>Email</Label>
+								<Label htmlFor={field.name}>{t("Email")}</Label>
 								<Input
 									id={field.name}
 									name={field.name}
@@ -102,7 +110,7 @@ export default function SignUpForm({
 								/>
 								{field.state.meta.errors.map((error) => (
 									<p key={error?.message} className="text-red-500">
-										{error?.message}
+										{t(error?.message)}
 									</p>
 								))}
 							</div>
@@ -114,7 +122,7 @@ export default function SignUpForm({
 					<form.Field name="password">
 						{(field) => (
 							<div className="space-y-2">
-								<Label htmlFor={field.name}>Password</Label>
+								<Label htmlFor={field.name}>{t("Password")}</Label>
 								<Input
 									id={field.name}
 									name={field.name}
@@ -126,7 +134,7 @@ export default function SignUpForm({
 								/>
 								{field.state.meta.errors.map((error) => (
 									<p key={error?.message} className="text-red-500">
-										{error?.message}
+										{t(error?.message)}
 									</p>
 								))}
 							</div>
@@ -146,7 +154,7 @@ export default function SignUpForm({
 							className="w-full"
 							disabled={!canSubmit || isSubmitting}
 						>
-							{isSubmitting ? "Creating account…" : "Create account"}
+							{t(isSubmitting ? "Creating account…" : "Create account")}
 						</Button>
 					)}
 				</form.Subscribe>
@@ -158,7 +166,7 @@ export default function SignUpForm({
 					onClick={onSwitchToSignIn}
 					className="text-indigo-600 hover:text-indigo-800"
 				>
-					Already have an account? Sign in
+					{t("Already have an account? Sign in")}
 				</Button>
 			</div>
 		</div>

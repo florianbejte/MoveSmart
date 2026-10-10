@@ -1,5 +1,8 @@
 "use client";
+
 import { useMemo, useState } from "react";
+import { dateLocale } from "@/lib/i18n/core";
+import { useT } from "@/lib/i18n/react";
 import {
 	CITY_LAYERS,
 	type CityFeed,
@@ -82,7 +85,7 @@ export function useCityLayers(now: number) {
 }
 type CityState = ReturnType<typeof useCityLayers>;
 const date = (value: number) =>
-	new Intl.DateTimeFormat("en-GB", {
+	new Intl.DateTimeFormat(dateLocale(), {
 		timeZone: "Europe/Vilnius",
 		day: "numeric",
 		month: "short",
@@ -102,6 +105,8 @@ export function CityLayers({
 	open: boolean;
 	onOpen: (value: boolean) => void;
 }) {
+	const t = useT();
+
 	const delayedLayers = city.enabled.filter((id) => {
 		const feed = city.feeds[id];
 		return (
@@ -129,7 +134,7 @@ export function CityLayers({
 		<section
 			className="city-layers"
 			data-open={open}
-			aria-label="City data layers"
+			aria-label={t("City data layers")}
 		>
 			<button
 				className="city-layers-heading"
@@ -138,22 +143,30 @@ export function CityLayers({
 				onClick={() => onOpen(!open)}
 			>
 				<span>
-					City layers <small>{city.enabled.length} on</small>
+					{t("City layers ")}
+					<small>
+						{t(city.enabled.length)}
+						{t(" on")}
+					</small>
 				</span>
-				<span>{open ? "−" : "+"}</span>
+				<span>{t(open ? "−" : "+")}</span>
 			</button>
 			{delayedLayers.length > 0 && (
 				<p className="city-layer-warning" role="status">
-					{delayedLayers
-						.map((id) => CITY_LAYERS.find((layer) => layer.id === id)?.label)
-						.join(", ")}
-					: updates delayed; map data may be outdated.
+					{t(
+						delayedLayers
+							.map((id) =>
+								t(CITY_LAYERS.find((layer) => layer.id === id)?.label),
+							)
+							.join(", "),
+					)}
+					{t(": updates delayed; map data may be outdated.")}
 				</p>
 			)}
 			{open && (
 				<div className="city-layer-options">
 					<p className="helper-text">
-						Choose what appears on your map. Tap any marker for details.
+						{t("Choose what appears on your map. Tap any marker for details.")}
 					</p>
 					{CITY_LAYERS.map((layer) => {
 						const feed = city.feeds[layer.id];
@@ -182,26 +195,28 @@ export function CityLayers({
 								<label>
 									<input
 										type="checkbox"
-										aria-label={layer.label}
+										aria-label={t(layer.label)}
 										checked={checked}
 										onChange={() => city.toggle(layer.id)}
 									/>
 									<MapSymbol kind={layer.id} color={layer.color} />
-									<strong>{layer.label}</strong>
-									<span>{checked && count !== undefined ? count : ""}</span>
+									<strong>{t(layer.label)}</strong>
+									<span>{t(checked && count !== undefined ? count : "")}</span>
 								</label>
 								{checked && (
 									<>
 										<details className="layer-description">
-											<summary>About this layer</summary>
-											<p>{layer.note}</p>
+											<summary>{t("About this layer")}</summary>
+											<p>{t(layer.note)}</p>
 										</details>
 										<small role="status">
-											{delayed
-												? `Refresh unavailable${feed.data ? " · saved or partial data" : ""}`
-												: feed.data
-													? `${count === 0 ? "No current records · " : ""}Fetched ${date(feed.data.fetchedAt)}`
-													: "Loading…"}
+											{t(
+												delayed
+													? `Refresh unavailable${feed.data ? " · saved or partial data" : ""}`
+													: feed.data
+														? `${count === 0 ? "No current records · " : ""}Fetched ${date(feed.data.fetchedAt)}`
+														: "Loading…",
+											)}
 										</small>
 										{delayed && (
 											<button
@@ -209,7 +224,8 @@ export function CityLayers({
 												className="text-button"
 												onClick={feed.retry}
 											>
-												Retry {layer.label.toLowerCase()}
+												{t("Retry ")}
+												{t(layer.label.toLowerCase())}
 											</button>
 										)}
 									</>
@@ -219,7 +235,7 @@ export function CityLayers({
 					})}
 					{city.enabled.includes("parking") && (
 						<p className="helper-text">
-							Parking: yellow · blue · red · green zones.
+							{t("Parking: yellow · blue · red · green zones.")}
 						</p>
 					)}
 
@@ -229,7 +245,7 @@ export function CityLayers({
 						target="_blank"
 						rel="noreferrer"
 					>
-						City data: JUDU / Vilnius ↗
+						{t("City data: JUDU / Vilnius ↗")}
 					</a>
 					<a
 						className="city-source"
@@ -237,45 +253,57 @@ export function CityLayers({
 						target="_blank"
 						rel="noreferrer"
 					>
-						Shelters: PAGD / Valstybės duomenų agentūra · CC BY 4.0 ↗
+						{t("Shelters: PAGD / Valstybės duomenų agentūra · CC BY 4.0 ↗")}
 					</a>
 				</div>
 			)}
 			<section
 				className="route-alerts"
 				data-empty={!alerts.length && !incidentDelayed && !!incidentFeed.data}
-				aria-label="Transit disruption notices"
+				aria-label={t("Transit disruption notices")}
 			>
 				{incidentDelayed ? (
-					<p role="status">Transit alerts may be incomplete or outdated.</p>
+					<p role="status">
+						{t("Transit alerts may be incomplete or outdated.")}
+					</p>
 				) : !incidentFeed.data ? (
-					<p>Checking transit alerts…</p>
+					<p>{t("Checking transit alerts…")}</p>
 				) : alerts.length === 0 ? (
 					<p>
-						{routeNames.length
-							? "No published disruptions for these route numbers."
-							: "No current transit disruptions published."}
+						{t(
+							routeNames.length
+								? "No published disruptions for these route numbers."
+								: "No current transit disruptions published.",
+						)}
 					</p>
 				) : (
 					<details className="alert-details">
 						<summary>
-							{routeNames.length
-								? "Alerts for these route numbers"
-								: "Transit alerts"}{" "}
-							· {alerts.length}
+							{t(
+								routeNames.length
+									? "Alerts for these route numbers"
+									: "Transit alerts",
+							)}
+							{t(" ")}· {t(alerts.length)}
 						</summary>
 						{alerts.map((f) => (
 							<article key={f.properties.id}>
 								<b>
-									{f.properties.routes.length
-										? `${f.properties.routes.join(", ")} · `
-										: ""}
-									{f.properties.title}
+									{t(
+										f.properties.routes.length
+											? `${f.properties.routes.join(", ")} · `
+											: "",
+									)}
+									{t(f.properties.title)}
 								</b>
-								<p>{f.properties.description}</p>
+								<p>{t(f.properties.description)}</p>
 								<small>
-									{f.properties.timing}
-									{f.properties.end ? ` · until ${date(f.properties.end)}` : ""}
+									{t(f.properties.timing)}
+									{t(
+										f.properties.end
+											? ` · until ${date(f.properties.end)}`
+											: "",
+									)}
 								</small>
 							</article>
 						))}
@@ -283,8 +311,9 @@ export function CityLayers({
 				)}
 				{routeNames.length > 0 && alerts.length > 0 && (
 					<small>
-						The source lists route numbers without always distinguishing buses
-						from trolleybuses.
+						{t(
+							"The source lists route numbers without always distinguishing buses from trolleybuses.",
+						)}
 					</small>
 				)}
 			</section>

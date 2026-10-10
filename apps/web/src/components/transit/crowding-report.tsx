@@ -1,4 +1,6 @@
 "use client";
+import { useT } from "@/lib/i18n/react";
+
 import "./crowding-report.css";
 import {
 	Armchair,
@@ -21,6 +23,8 @@ import { serviceColor } from "@/lib/transit/service-colors";
 import type { Vehicle } from "@/lib/transit/types";
 
 export function CrowdingArt({ level }: { level: Crowding }) {
+	const _t = useT();
+
 	const Icon =
 		level === "seats"
 			? Armchair
@@ -42,39 +46,48 @@ export function CrowdingCard({
 	unavailable: boolean;
 	onReport: () => void;
 }) {
+	const t = useT();
+
 	const item = CROWDING.find((x) => x.id === report?.level);
 	return (
-		<section className="crowding-card" aria-label="Community crowding">
+		<section className="crowding-card" aria-label={t("Community crowding")}>
 			<div className="crowding-card-title">
 				<UsersRound size={17} />
-				<strong>On board, right now</strong>
-				<span>Community</span>
+				<strong>{t("On board, right now")}</strong>
+				<span>{t("Community")}</span>
 			</div>
 			{item && report ? (
 				<div className="crowding-card-result">
 					<CrowdingArt level={item.id} />
 					<div>
-						<strong>{item.label}</strong>
+						<strong>{t(item.label)}</strong>
 						<p>
-							{Math.max(
-								0,
-								Math.floor((Date.now() - report.updatedAt) / 60000),
-							) || "Less than 1"}{" "}
-							min ago · {report.count}{" "}
-							{report.count === 1 ? "report" : "reports"}
+							{t(
+								Math.max(
+									0,
+									Math.floor((Date.now() - report.updatedAt) / 60000),
+								) || "Less than 1",
+							)}
+							{t(" ")}
+							{t("min ago · ")}
+							{t(report.count)}
+							{t(" ")}
+							{t(report.count === 1 ? "report" : "reports")}
 						</p>
 					</div>
 				</div>
 			) : (
 				<p>
-					{unavailable
-						? "Community reports are unavailable right now."
-						: "No recent reports. On this bus? Help the next rider."}
+					{t(
+						unavailable
+							? "Community reports are unavailable right now."
+							: "No recent reports. On this bus? Help the next rider.",
+					)}
 				</p>
 			)}
 			<button type="button" onClick={onReport}>
 				<MessageCirclePlus size={17} />
-				{item ? "Update crowding" : "Report crowding"}
+				{t(item ? "Update crowding" : "Report crowding")}
 			</button>
 		</section>
 	);
@@ -92,6 +105,8 @@ export function CrowdingReport({
 	onClose: () => void;
 	onSent: (vehicle: Vehicle) => void;
 }) {
+	const t = useT();
+
 	const dialog = useRef<HTMLDialogElement>(null);
 	const [vehicle, setVehicle] = useState<Vehicle | undefined>(initialVehicle);
 	const [level, setLevel] = useState<Crowding | null>(null);
@@ -161,7 +176,7 @@ export function CrowdingReport({
 			<header className="report-header">
 				<button
 					type="button"
-					aria-label="Back to vehicle selection"
+					aria-label={t("Back to vehicle selection")}
 					disabled={!vehicle || sending || sent}
 					onClick={() => {
 						setVehicle(undefined);
@@ -171,10 +186,10 @@ export function CrowdingReport({
 				>
 					<ArrowLeft size={21} />
 				</button>
-				<span>Riders helping riders</span>
+				<span>{t("Riders helping riders")}</span>
 				<button
 					type="button"
-					aria-label="Close report"
+					aria-label={t("Close report")}
 					disabled={sending}
 					onClick={onClose}
 				>
@@ -186,28 +201,33 @@ export function CrowdingReport({
 					<span className="report-success-mark">
 						<CheckCheck size={46} />
 					</span>
-					<h2 id="report-title">Thanks for the heads-up.</h2>
+					<h2 id="report-title">{t("Thanks for the heads-up.")}</h2>
 					<p>
-						Your crowding report is shared for this trip. It expires in 15
-						minutes.
+						{t(
+							"Your crowding report is shared for this trip. It expires in 15 minutes.",
+						)}
 					</p>
 					<button className="report-submit" type="button" onClick={onClose}>
-						View this bus
+						{t("View this bus")}
 					</button>
 				</div>
 			) : (
 				<>
 					<div className="report-body">
 						<span className="flow-eyebrow">
-							{vehicle ? "Step 2 of 2 · Occupancy" : "Step 1 of 2 · Your bus"}
+							{t(
+								vehicle ? "Step 2 of 2 · Occupancy" : "Step 1 of 2 · Your bus",
+							)}
 						</span>
 						<h2 id="report-title">
-							{vehicle ? "How’s the ride?" : "Which bus are you on?"}
+							{t(vehicle ? "How’s the ride?" : "Which bus are you on?")}
 						</h2>
 						<p className="report-intro">
-							{vehicle
-								? "A quick update makes someone else’s journey easier."
-								: "Choose the exact vehicle. Match the route, destination and vehicle number."}
+							{t(
+								vehicle
+									? "A quick update makes someone else’s journey easier."
+									: "Choose the exact vehicle. Match the route, destination and vehicle number.",
+							)}
 						</p>
 						{vehicle ? (
 							<>
@@ -217,21 +237,23 @@ export function CrowdingReport({
 											background: serviceColor(vehicle.route, vehicle.mode),
 										}}
 									>
-										{vehicle.route}
+										{t(vehicle.route)}
 									</span>
 									<div>
 										<strong>
-											{vehicle.destination || "Destination unavailable"}
+											{t(vehicle.destination || "Destination unavailable")}
 										</strong>
 										<small>
-											{vehicle.mode === "bus" ? "Bus" : "Trolleybus"} · Vehicle{" "}
-											{vehicle.number}
+											{t(vehicle.mode === "bus" ? "Bus" : "Trolleybus")}
+											{t(" · Vehicle")}
+											{t(" ")}
+											{t(vehicle.number)}
 										</small>
 									</div>
 								</div>
 								<fieldset
 									className="crowding-choices"
-									aria-label="Crowding level"
+									aria-label={t("Crowding level")}
 								>
 									{CROWDING.map((item) => (
 										<button
@@ -242,8 +264,8 @@ export function CrowdingReport({
 											onClick={() => setLevel(item.id)}
 										>
 											<CrowdingArt level={item.id} />
-											<strong>{item.label}</strong>
-											<small>{item.description}</small>
+											<strong>{t(item.label)}</strong>
+											<small>{t(item.description)}</small>
 											<span className="choice-check">
 												{level === item.id ? <Check size={14} /> : null}
 											</span>
@@ -251,13 +273,15 @@ export function CrowdingReport({
 									))}
 								</fieldset>
 								<p className="report-context">
-									Report what you can see on this vehicle now. Community reports
-									are separate from official transport data.
+									{t(
+										"Report what you can see on this vehicle now. Community reports are separate from official transport data.",
+									)}
 								</p>
 								{!valid && (
 									<p role="alert" className="report-error">
-										This vehicle no longer has a fresh position for this trip.
-										Go back and choose a live bus.
+										{t(
+											"This vehicle no longer has a fresh position for this trip. Go back and choose a live bus.",
+										)}
 									</p>
 								)}
 							</>
@@ -265,8 +289,8 @@ export function CrowdingReport({
 							<>
 								<input
 									className="report-search"
-									aria-label="Find a bus to report"
-									placeholder="Route, destination or vehicle number"
+									aria-label={t("Find a bus to report")}
+									placeholder={t("Route, destination or vehicle number")}
 									value={query}
 									onChange={(e) => setQuery(e.target.value)}
 								/>
@@ -278,38 +302,42 @@ export function CrowdingReport({
 											onClick={() => setVehicle(v)}
 										>
 											<span
-												style={{ background: serviceColor(v.route, v.mode) }}
+												style={{
+													background: serviceColor(v.route, v.mode),
+												}}
 											>
-												{v.route}
+												{t(v.route)}
 											</span>
 											<div>
 												<strong>
-													{v.destination || "Destination unavailable"}
+													{t(v.destination || "Destination unavailable")}
 												</strong>
 												<small>
-													Vehicle {v.number} ·{" "}
-													{v.mode === "bus" ? "Bus" : "Trolleybus"}
+													{t("Vehicle ")}
+													{t(v.number)} ·{t(" ")}
+													{t(v.mode === "bus" ? "Bus" : "Trolleybus")}
 												</small>
 											</div>
 											<ArrowLeft className="report-forward" size={18} />
 										</button>
 									))}
 									{matches.length === 0 && (
-										<p>No live vehicles match. Try a route number.</p>
+										<p>{t("No live vehicles match. Try a route number.")}</p>
 									)}
 								</div>
 							</>
 						)}
 						{error && (
 							<p role="alert" className="report-error">
-								{error}
+								{t(error)}
 							</p>
 						)}
 					</div>
 					<footer className="report-footer">
 						<p>
-							No name or location is published. One current report per device
-							and trip.
+							{t(
+								"No name or location is published. One current report per device and trip.",
+							)}
 						</p>
 						{vehicle && (
 							<button
@@ -318,7 +346,7 @@ export function CrowdingReport({
 								disabled={!level || sending || !valid}
 								onClick={send}
 							>
-								{sending ? "Sending…" : "Send report"}
+								{t(sending ? "Sending…" : "Send report")}
 								<MessageCirclePlus size={19} />
 							</button>
 						)}

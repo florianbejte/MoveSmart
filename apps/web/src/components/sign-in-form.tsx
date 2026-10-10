@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@MoveSmart/ui/components/button";
 import { Input } from "@MoveSmart/ui/components/input";
 import { Label } from "@MoveSmart/ui/components/label";
@@ -6,14 +8,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import z from "zod";
-
 import { authClient } from "@/lib/auth-client";
+import { useT } from "@/lib/i18n/react";
 
 export default function SignInForm({
 	onSwitchToSignUp,
 }: {
 	onSwitchToSignUp: () => void;
 }) {
+	const t = useT();
+
 	const router = useRouter();
 
 	const form = useForm({
@@ -30,10 +34,12 @@ export default function SignInForm({
 				{
 					onSuccess: () => {
 						router.push("/");
-						toast.success("Sign in successful");
+						toast.success(t("Sign in successful"));
 					},
-					onError: (error) => {
-						toast.error(error.error.message || error.error.statusText);
+					onError: () => {
+						toast.error(
+							t("Unable to sign in. Check your details and try again."),
+						);
 					},
 				},
 			);
@@ -49,9 +55,9 @@ export default function SignInForm({
 	return (
 		<div className="account-panel account-form">
 			<Link className="account-map-link" href="/">
-				← Back to map
+				{t("← Back to map")}
 			</Link>
-			<h1>Welcome back.</h1>
+			<h1>{t("Welcome back.")}</h1>
 
 			<form
 				onSubmit={(e) => {
@@ -65,7 +71,7 @@ export default function SignInForm({
 					<form.Field name="email">
 						{(field) => (
 							<div className="space-y-2">
-								<Label htmlFor={field.name}>Email</Label>
+								<Label htmlFor={field.name}>{t("Email")}</Label>
 								<Input
 									id={field.name}
 									name={field.name}
@@ -77,7 +83,7 @@ export default function SignInForm({
 								/>
 								{field.state.meta.errors.map((error) => (
 									<p key={error?.message} className="text-red-500">
-										{error?.message}
+										{t(error?.message)}
 									</p>
 								))}
 							</div>
@@ -89,7 +95,7 @@ export default function SignInForm({
 					<form.Field name="password">
 						{(field) => (
 							<div className="space-y-2">
-								<Label htmlFor={field.name}>Password</Label>
+								<Label htmlFor={field.name}>{t("Password")}</Label>
 								<Input
 									id={field.name}
 									name={field.name}
@@ -101,7 +107,7 @@ export default function SignInForm({
 								/>
 								{field.state.meta.errors.map((error) => (
 									<p key={error?.message} className="text-red-500">
-										{error?.message}
+										{t(error?.message)}
 									</p>
 								))}
 							</div>
@@ -121,7 +127,7 @@ export default function SignInForm({
 							className="w-full"
 							disabled={!canSubmit || isSubmitting}
 						>
-							{isSubmitting ? "Signing in…" : "Sign in"}
+							{t(isSubmitting ? "Signing in…" : "Sign in")}
 						</Button>
 					)}
 				</form.Subscribe>
@@ -133,7 +139,7 @@ export default function SignInForm({
 					onClick={onSwitchToSignUp}
 					className="text-indigo-600 hover:text-indigo-800"
 				>
-					Need an account? Create account
+					{t("Need an account? Create account")}
 				</Button>
 			</div>
 		</div>

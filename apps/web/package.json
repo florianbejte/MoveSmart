@@ -8,7 +8,7 @@
 		"check-types": "tsc --noEmit",
 		"start": "next start",
 		"env:generate": "varlock codegen",
-		"test": "bun test src/lib/transit"
+		"test": "bun test src/lib"
 	},
 	"dependencies": {
 		"@MoveSmart/backend": "workspace:*",

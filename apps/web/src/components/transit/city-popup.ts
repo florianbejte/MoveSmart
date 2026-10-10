@@ -1,7 +1,8 @@
+import { dateLocale, t } from "@/lib/i18n/core";
 import { CITY_LAYERS, type CityFeature } from "@/lib/transit/city";
 
 const date = (value: number) =>
-	new Intl.DateTimeFormat("en-GB", {
+	new Intl.DateTimeFormat(dateLocale(), {
 		timeZone: "Europe/Vilnius",
 		day: "numeric",
 		month: "short",
@@ -18,10 +19,10 @@ export function cityPopupContent(
 	const layer = CITY_LAYERS.find((item) => item.id === p.category);
 	const root = document.createElement("article");
 	root.className = "city-map-detail";
-	root.setAttribute("aria-label", `${layer?.label}: ${p.title}`);
+	root.setAttribute("aria-label", `${t(layer?.label)}: ${p.title}`);
 	const add = (tag: string, text: string, className = "") => {
 		const element = document.createElement(tag);
-		element.textContent = text;
+		element.textContent = t(text);
 		element.className = className;
 		root.append(element);
 		return element;
@@ -42,7 +43,7 @@ export function cityPopupContent(
 		);
 	if (pinned) {
 		const link = document.createElement("a");
-		link.textContent = "View source ↗";
+		link.textContent = t("View source ↗");
 		link.href = p.source;
 		link.target = "_blank";
 		link.rel = "noopener noreferrer";

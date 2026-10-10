@@ -1,3 +1,4 @@
+import { dateLocale, t } from "@/lib/i18n/core";
 import { freshVehicle } from "@/lib/transit/core";
 import type { Vehicle } from "@/lib/transit/types";
 
@@ -11,7 +12,7 @@ export function vehiclePopupContent(
 	root.setAttribute("role", "tooltip");
 	const add = (tag: string, text: string) => {
 		const node = document.createElement(tag);
-		node.textContent = text;
+		node.textContent = t(text);
 		root.append(node);
 	};
 	const fresh = freshVehicle(vehicle, now) && !feedStale;
@@ -30,7 +31,7 @@ export function vehiclePopupContent(
 	add("p", `${fresh ? "Speed" : "Last reported speed"}: ${vehicle.speed} km/h`);
 	add(
 		"small",
-		`Position updated ${new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vilnius", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(vehicle.measuredAt)}`,
+		`Position updated ${new Intl.DateTimeFormat(dateLocale(), { timeZone: "Europe/Vilnius", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(vehicle.measuredAt)}`,
 	);
 	add("small", "Click for route and stops");
 	return root;

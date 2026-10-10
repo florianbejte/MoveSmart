@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LanguageSetup } from "@/lib/i18n/react";
 import "@fontsource-variable/montserrat";
 
 import "../index.css";
@@ -15,7 +16,7 @@ import { getAuthServer } from "@/lib/auth-server";
 export const metadata: Metadata = {
 	title: "MoveSmart",
 	description:
-		"Live Vilnius transport and personal trip planning: bus, walk, bike or car, ranked for you.",
+		"Vilniaus transportas realiuoju laiku ir kelionių planavimas pagal jūsų poreikius.",
 };
 
 export default async function RootLayout({
@@ -26,12 +27,13 @@ export default async function RootLayout({
 	const auth = getAuthServer();
 	const shell = (
 		<div className="app-shell">
+			<LanguageSetup />
 			<Header />
 			{children}
 		</div>
 	);
 	return (
-		<html lang="en" suppressHydrationWarning>
+		<html lang="lt" suppressHydrationWarning>
 			<body className="antialiased">
 				{auth && ENV.NEXT_PUBLIC_CONVEX_URL ? (
 					<Providers

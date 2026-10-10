@@ -2,6 +2,8 @@
 
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
+import { t as mapText } from "@/lib/i18n/core";
+import { useT } from "@/lib/i18n/react";
 import { freshVehicle } from "@/lib/transit/core";
 import { serviceColor } from "@/lib/transit/service-colors";
 import type {
@@ -23,6 +25,18 @@ import { cityPopupContent } from "./city-popup";
 import { mapSymbolImage } from "./map-symbol";
 import type { PlanPath } from "./trip-planner";
 import { vehiclePopupContent } from "./vehicle-popup";
+
+function localizedPopup(options: maplibregl.PopupOptions) {
+	const popup = new maplibregl.Popup(options);
+	popup.on("open", () => {
+		const button = popup
+			.getElement()
+			.querySelector(".maplibregl-popup-close-button");
+		button?.setAttribute("aria-label", mapText("Close popup"));
+		button?.setAttribute("title", mapText("Close popup"));
+	});
+	return popup;
+}
 
 type Props = {
 	community: CommunityCollection;
@@ -48,6 +62,8 @@ type Props = {
 };
 const EMPTY_PLAN = { type: "FeatureCollection" as const, features: [] };
 export default function TransitMap(props: Props) {
+	const t = useT();
+
 	const container = useRef<HTMLElement>(null);
 	const map = useRef<maplibregl.Map | null>(null);
 	const markers = useRef(new Map<string, maplibregl.Marker>());
@@ -67,6 +83,39 @@ export default function TransitMap(props: Props) {
 	} | null>(null);
 	const [ready, setReady] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	useEffect(() => {
+		if (!ready || !container.current) return;
+		vehiclePopup.current?.popup.remove();
+		cityPopup.current?.popup.remove();
+		communityPreview.current?.remove();
+		tripStopPreview.current?.remove();
+		for (const [selector, label] of [
+			[".maplibregl-ctrl-zoom-in", "Zoom in"],
+			[".maplibregl-ctrl-zoom-out", "Zoom out"],
+			[".maplibregl-ctrl-attrib-button", "Toggle attribution"],
+		]) {
+			const control = container.current.querySelector(selector);
+			control?.setAttribute("aria-label", t(label));
+			control?.setAttribute("title", t(label));
+		}
+	}, [ready, t]);
+	useEffect(() => {
+		const instance = map.current;
+		if (!ready || !instance) return;
+		instance.getCanvas().setAttribute("aria-label", t("Map"));
+		const attribution = new maplibregl.AttributionControl({
+			compact: false,
+			customAttribution: [
+				ENV.NEXT_PUBLIC_MAP_ATTRIBUTION ||
+					`© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> ${t("contributors")}`,
+				`© <a href="https://judu.lt/atviri-duomenys/" target="_blank" rel="noopener noreferrer">JUDU / Vilnius</a> · <a href="https://open.geodata.gov.lt/datasets/8a1e4b06ca714e2983b67c737c667abe_0/">${t("Shelters")}: PAGD / VDA (CC BY 4.0)</a> · <a href="https://gis.ktvis.lt/arcgis/rest/services/LAKD/Nac_taku_pletra/MapServer/11">${t("Paths")}: KTVIS</a>`,
+			],
+		});
+		instance.addControl(attribution, "bottom-right");
+		return () => {
+			if (instance.hasControl(attribution)) instance.removeControl(attribution);
+		};
+	}, [ready, t]);
 	useEffect(() => {
 		handlers.current = props;
 	});
@@ -104,9 +153,6 @@ export default function TransitMap(props: Props) {
 							],
 							tileSize: 256,
 							maxzoom: 19,
-							attribution:
-								ENV.NEXT_PUBLIC_MAP_ATTRIBUTION ||
-								'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
 						},
 					},
 					layers: [
@@ -137,10 +183,7 @@ export default function TransitMap(props: Props) {
 			new maplibregl.NavigationControl({ showCompass: false }),
 			"top-right",
 		);
-		instance.addControl(
-			new maplibregl.AttributionControl({ compact: false }),
-			"bottom-right",
-		);
+
 		instance.on("error", () =>
 			setError(
 				"Some map tiles could not load. Live transit data is still available; check your connection.",
@@ -172,8 +215,6 @@ export default function TransitMap(props: Props) {
 			instance.addSource("city", {
 				type: "geojson",
 				data: { type: "FeatureCollection", features: [] },
-				attribution:
-					'© <a href="https://judu.lt/atviri-duomenys/" target="_blank" rel="noopener noreferrer">JUDU / Vilnius</a> · <a href="https://open.geodata.gov.lt/datasets/8a1e4b06ca714e2983b67c737c667abe_0/">Shelters: PAGD / VDA (CC BY 4.0)</a> · <a href="https://gis.ktvis.lt/arcgis/rest/services/LAKD/Nac_taku_pletra/MapServer/11">Paths: KTVIS</a>',
 			});
 			instance.addLayer({
 				id: "city-fill",
@@ -263,7 +304,7 @@ export default function TransitMap(props: Props) {
 				const stale = handlers.current.cityDelayed.includes(
 					feature.properties.category,
 				);
-				const popup = new maplibregl.Popup({
+				const popup = localizedPopup({
 					closeButton: pinned,
 					closeOnClick: false,
 					focusAfterOpen: false,
@@ -498,8 +539,10 @@ export default function TransitMap(props: Props) {
 				tripStopPreview.current?.remove();
 				const content = document.createElement("div");
 				content.setAttribute("role", "tooltip");
-				content.textContent = `${f.properties.sequence}. ${f.properties.name} · Click for departures`;
-				tripStopPreview.current = new maplibregl.Popup({
+				content.textContent = mapText(
+					`${f.properties.sequence}. ${f.properties.name} · Click for departures`,
+				);
+				tripStopPreview.current = localizedPopup({
 					closeButton: false,
 					closeOnClick: false,
 					focusAfterOpen: false,
@@ -568,10 +611,10 @@ export default function TransitMap(props: Props) {
 					["small", "Click to view or confirm"],
 				]) {
 					const node = document.createElement(tag);
-					node.textContent = text;
+					node.textContent = mapText(text);
 					root.append(node);
 				}
-				communityPreview.current = new maplibregl.Popup({
+				communityPreview.current = localizedPopup({
 					closeButton: false,
 					closeOnClick: false,
 					focusAfterOpen: false,
@@ -772,7 +815,7 @@ export default function TransitMap(props: Props) {
 					vehiclePopup.current?.popup.remove();
 					communityPreview.current?.remove();
 					if (!cityPopup.current?.pinned) cityPopup.current?.popup.remove();
-					const popup = new maplibregl.Popup({
+					const popup = localizedPopup({
 						closeButton: false,
 						closeOnClick: false,
 						focusAfterOpen: false,
@@ -826,7 +869,9 @@ export default function TransitMap(props: Props) {
 			button.textContent = vehicle.route;
 			button.setAttribute(
 				"aria-label",
-				`${vehicle.mode === "bus" ? "Bus" : "Trolleybus"} ${vehicle.route} to ${vehicle.destination}, vehicle ${vehicle.number}`,
+				t(
+					`${vehicle.mode === "bus" ? "Bus" : "Trolleybus"} ${vehicle.route} to ${vehicle.destination}, vehicle ${vehicle.number}`,
+				),
 			);
 			// Custom hover preview replaces the browser title tooltip.
 			button.style.setProperty("--heading", `${vehicle.heading}deg`);
@@ -842,6 +887,7 @@ export default function TransitMap(props: Props) {
 		}
 	}, [
 		ready,
+		t,
 		props.vehicles,
 		props.selectedId,
 		props.stale,
@@ -858,13 +904,13 @@ export default function TransitMap(props: Props) {
 		if (!userMarker.current) {
 			const element = document.createElement("div");
 			element.className = "user-location";
-			element.setAttribute("aria-label", "Your location");
+			element.setAttribute("aria-label", t("Your location"));
 			userMarker.current = new maplibregl.Marker({ element })
 				.setLngLat([props.location.lon, props.location.lat])
 				.addTo(map.current);
 		}
 		userMarker.current.setLngLat([props.location.lon, props.location.lat]);
-	}, [ready, props.location]);
+	}, [ready, props.location, t]);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the key changes whenever the drawn path does.
 	useEffect(() => {
 		if (!ready || !map.current) return;
@@ -939,11 +985,11 @@ export default function TransitMap(props: Props) {
 			<section
 				ref={container}
 				className="transit-map"
-				aria-label="Live Vilnius transit map"
+				aria-label={t("Live Vilnius transit map")}
 			/>
 			{error && (
 				<div className="map-error" role="status">
-					{error}
+					{t(error)}
 				</div>
 			)}
 		</>

@@ -13,6 +13,7 @@ import {
 	Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/i18n/react";
 import {
 	DEFAULT_PROFILE,
 	NEEDS,
@@ -44,6 +45,8 @@ export function Onboarding({
 	onSkip: () => void;
 	doneLabel?: string;
 }) {
+	const t = useT();
+
 	const [step, setStep] = useState(0);
 	const [p, setP] = useState<Profile>(initial ?? DEFAULT_PROFILE);
 	const dialog = useRef<HTMLDialogElement>(null);
@@ -64,21 +67,21 @@ export function Onboarding({
 			}}
 		>
 			<div className="onboarding-top">
-				<ol className="onboarding-steps" aria-label="Progress">
+				<ol className="onboarding-steps" aria-label={t("Progress")}>
 					{STEPS.map((s, i) => (
 						<li
 							key={s}
 							className={i <= step ? "done" : ""}
 							aria-current={i === step ? "step" : undefined}
 						>
-							<span className="sr-only">{s}</span>
+							<span className="sr-only">{t(s)}</span>
 						</li>
 					))}
 				</ol>
 				<button
 					type="button"
 					className="onboarding-close"
-					aria-label="Skip for now"
+					aria-label={t("Skip for now")}
 					onClick={onSkip}
 				>
 					<X size={18} />
@@ -87,27 +90,32 @@ export function Onboarding({
 			{step === 0 && (
 				<section>
 					<span className="flow-eyebrow">
-						Step {step + 1} of {STEPS.length} · Your travel preferences
+						{t("Step ")}
+						{t(step + 1)}
+						{t(" of ")}
+						{t(STEPS.length)}
+						{t(" · Your travel preferences")}
 					</span>
-					<h2 id="onboarding-title">Who’s usually travelling?</h2>
+					<h2 id="onboarding-title">{t("Who’s usually travelling?")}</h2>
 					<p>
-						We’ll suggest the way that suits you — bus, walk, bike, scooter or
-						car. Pick any that apply.
+						{t(
+							"We’ll suggest the way that suits you — bus, walk, bike, scooter or car. Pick any that apply.",
+						)}
 					</p>
 					<div className="choice-grid">
 						<Choice
 							selected={!p.needs.length}
 							onClick={() => setP({ ...p, needs: [] })}
-							label="Just me"
-							hint="No special needs"
+							label={t("Just me")}
+							hint={t("No special needs")}
 						/>
 						{NEEDS.map((n) => (
 							<Choice
 								key={n.id}
 								selected={p.needs.includes(n.id)}
 								onClick={() => setP({ ...p, needs: toggle(p.needs, n.id) })}
-								label={n.label}
-								hint={n.hint}
+								label={t(n.label)}
+								hint={t(n.hint)}
 							/>
 						))}
 					</div>
@@ -116,37 +124,41 @@ export function Onboarding({
 			{step === 1 && (
 				<section>
 					<span className="flow-eyebrow">
-						Step {step + 1} of {STEPS.length} · Your travel preferences
+						{t("Step ")}
+						{t(step + 1)}
+						{t(" of ")}
+						{t(STEPS.length)}
+						{t(" · Your travel preferences")}
 					</span>
-					<h2 id="onboarding-title">What can you use?</h2>
-					<p>We only suggest what you actually have.</p>
+					<h2 id="onboarding-title">{t("What can you use?")}</h2>
+					<p>{t("We only suggest what you actually have.")}</p>
 					<div className="choice-grid">
 						<Choice
 							icon={<Car size={20} />}
 							selected={p.hasCar}
 							onClick={() => setP({ ...p, hasCar: !p.hasCar })}
-							label="A car"
-							hint="We’ll compare it honestly"
+							label={t("A car")}
+							hint={t("We’ll compare it honestly")}
 						/>
 						<Choice
 							icon={<Bike size={20} />}
 							selected={p.hasBike}
 							onClick={() => setP({ ...p, hasBike: !p.hasBike })}
-							label="My own bike"
+							label={t("My own bike")}
 						/>
 						<Choice
 							icon={<Zap size={20} />}
 							selected={p.sharedOk}
 							onClick={() => setP({ ...p, sharedOk: !p.sharedOk })}
-							label="Shared bikes & scooters"
-							hint="Bolt, CityBee and others"
+							label={t("Shared bikes & scooters")}
+							hint={t("Bolt, CityBee and others")}
 						/>
 						<Choice
 							icon={<Ticket size={20} />}
 							selected={p.hasPass}
 							onClick={() => setP({ ...p, hasPass: !p.hasPass })}
-							label="A transit pass"
-							hint="Rides cost nothing extra"
+							label={t("A transit pass")}
+							hint={t("Rides cost nothing extra")}
 						/>
 					</div>
 				</section>
@@ -154,10 +166,14 @@ export function Onboarding({
 			{step === 2 && (
 				<section>
 					<span className="flow-eyebrow">
-						Step {step + 1} of {STEPS.length} · Your travel preferences
+						{t("Step ")}
+						{t(step + 1)}
+						{t(" of ")}
+						{t(STEPS.length)}
+						{t(" · Your travel preferences")}
 					</span>
-					<h2 id="onboarding-title">What matters most?</h2>
-					<p>Choose up to two. They decide how we rank your options.</p>
+					<h2 id="onboarding-title">{t("What matters most?")}</h2>
+					<p>{t("Choose up to two. They decide how we rank your options.")}</p>
 					<div className="choice-grid">
 						{PRIORITIES.map((x) => (
 							<Choice
@@ -167,8 +183,8 @@ export function Onboarding({
 									const next = toggle(p.priorities, x.id).slice(-2);
 									setP({ ...p, priorities: next.length ? next : [x.id] });
 								}}
-								label={x.label}
-								hint={x.hint}
+								label={t(x.label)}
+								hint={t(x.hint)}
 							/>
 						))}
 					</div>
@@ -177,12 +193,16 @@ export function Onboarding({
 			{step === 3 && (
 				<section>
 					<span className="flow-eyebrow">
-						Step {step + 1} of {STEPS.length} · Your travel preferences
+						{t("Step ")}
+						{t(step + 1)}
+						{t(" of ")}
+						{t(STEPS.length)}
+						{t(" · Your travel preferences")}
 					</span>
-					<h2 id="onboarding-title">How far will you walk?</h2>
-					<p>Longer walks get a penalty when we compare routes.</p>
+					<h2 id="onboarding-title">{t("How far will you walk?")}</h2>
+					<p>{t("Longer walks get a penalty when we compare routes.")}</p>
 					<fieldset className="walk-limits">
-						<legend className="sr-only">Longest comfortable walk</legend>
+						<legend className="sr-only">{t("Longest comfortable walk")}</legend>
 						{WALK_LIMITS.map((m) => (
 							<button
 								type="button"
@@ -191,7 +211,7 @@ export function Onboarding({
 								onClick={() => setP({ ...p, walkLimit: m })}
 							>
 								<Footprints size={16} />
-								{m === 25 ? "20+ min" : `${m} min`}
+								{t(m === 25 ? "20+ min" : `${m} min`)}
 							</button>
 						))}
 					</fieldset>
@@ -201,37 +221,47 @@ export function Onboarding({
 						onClick={() =>
 							setP({ ...p, weatherSensitive: !p.weatherSensitive })
 						}
-						label="Rain and cold change my plans"
-						hint="Weather counts double for you"
+						label={t("Rain and cold change my plans")}
+						hint={t("Weather counts double for you")}
 					/>
 				</section>
 			)}
 			{last && (
 				<section className="onboarding-summary">
 					<span className="flow-eyebrow">
-						Step {step + 1} of {STEPS.length} · Your travel preferences
+						{t("Step ")}
+						{t(step + 1)}
+						{t(" of ")}
+						{t(STEPS.length)}
+						{t(" · Your travel preferences")}
 					</span>
-					<h2 id="onboarding-title">{persona(p)}</h2>
+					<h2 id="onboarding-title">{t(persona(p))}</h2>
 					<p>
-						Every trip is ranked for you using live buses, weather and your
-						answers. Your profile stays on this device.
+						{t(
+							"Every trip is ranked for you using live buses, weather and your answers. Your profile stays on this device.",
+						)}
 					</p>
 					<ul>
 						<li>
 							<Check size={15} />
-							{p.needs.length
-								? NEEDS.filter((n) => p.needs.includes(n.id))
-										.map((n) => n.label)
-										.join(", ")
-								: "Travelling light"}
+							{t(
+								p.needs.length
+									? NEEDS.filter((n) => p.needs.includes(n.id))
+											.map((n) => t(n.label))
+											.join(", ")
+									: t("Travelling light"),
+							)}
 						</li>
 						<li>
 							<Check size={15} />
-							Cares about {p.priorities.map((x) => CARES[x]).join(" and ")}
+							{t("Cares about ")}
+							{t(p.priorities.map((x) => t(CARES[x])).join(` ${t("and")} `))}
 						</li>
 						<li>
 							<Check size={15} />
-							Walks up to {p.walkLimit === 25 ? "20+" : p.walkLimit} min
+							{t("Walks up to ")}
+							{t(p.walkLimit === 25 ? "20+" : p.walkLimit)}
+							{t(" min")}
 						</li>
 					</ul>
 				</section>
@@ -244,11 +274,11 @@ export function Onboarding({
 						onClick={() => setStep(step - 1)}
 					>
 						<ArrowLeft size={16} />
-						Back
+						{t("Back")}
 					</button>
 				) : (
 					<button type="button" className="onboarding-back" onClick={onSkip}>
-						{initial ? "Cancel" : "Skip"}
+						{t(initial ? "Cancel" : "Skip")}
 					</button>
 				)}
 				<button
@@ -256,7 +286,7 @@ export function Onboarding({
 					className="onboarding-next"
 					onClick={() => (last ? onDone(p) : setStep(step + 1))}
 				>
-					{last ? doneLabel : "Next"}
+					{t(last ? doneLabel : "Next")}
 					<ArrowRight size={16} />
 				</button>
 			</div>
@@ -277,6 +307,8 @@ function Choice({
 	hint?: string;
 	icon?: React.ReactNode;
 }) {
+	const t = useT();
+
 	return (
 		<button
 			type="button"
@@ -284,10 +316,10 @@ function Choice({
 			aria-pressed={selected}
 			onClick={onClick}
 		>
-			{icon && <span className="choice-icon">{icon}</span>}
+			{icon && <span className="choice-icon">{t(icon)}</span>}
 			<span className="choice-text">
-				<strong>{label}</strong>
-				{hint && <small>{hint}</small>}
+				<strong>{t(label)}</strong>
+				{hint && <small>{t(hint)}</small>}
 			</span>
 			<span className="choice-check" aria-hidden="true">
 				{selected && <Check size={14} />}

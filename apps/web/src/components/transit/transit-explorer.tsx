@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { t } from "@/lib/i18n/core";
+import { useT } from "@/lib/i18n/react";
 import { DEFAULT_PROFILE } from "@/lib/plan/profile";
 import { communityFeatures } from "@/lib/reports/map";
 import type { ReportsFeed } from "@/lib/reports/types";
@@ -64,7 +66,7 @@ const TransitMap = dynamic(() => import("./transit-map"), {
 	loading: () => (
 		<div className="map-loading">
 			<RefreshCw className="spin" size={24} />
-			<span>Opening Vilnius…</span>
+			<span>{t("Opening Vilnius…")}</span>
 		</div>
 	),
 });
@@ -90,6 +92,8 @@ function RouteBadge({
 	route?: TransitRoute;
 	label?: string;
 }) {
+	const t = useT();
+
 	return (
 		<span
 			className="route-badge"
@@ -102,12 +106,14 @@ function RouteBadge({
 				color: "white",
 			}}
 		>
-			{route?.name ?? label ?? "—"}
+			{t(route?.name ?? label ?? "—")}
 		</span>
 	);
 }
 
 export default function TransitExplorer() {
+	const t = useT();
+
 	const network = useTransit<Network>("/api/transit?kind=network", 300_000);
 	const live = useTransit<LiveFeed>("/api/transit?kind=vehicles");
 	const [query, setQuery] = useState("");
@@ -414,13 +420,13 @@ export default function TransitExplorer() {
 			data-detail={!!selection && !cityOpen && !planOpen}
 			data-stage={planOpen ? planStage : "map"}
 		>
-			<aside className="explorer-panel" aria-label="Transit explorer">
+			<aside className="explorer-panel" aria-label={t("Transit explorer")}>
 				<button
 					type="button"
 					className="sheet-handle"
-					aria-label={
-						sheet === "full" ? "Show more map" : "Expand transit panel"
-					}
+					aria-label={t(
+						sheet === "full" ? "Show more map" : "Expand transit panel",
+					)}
 					aria-expanded={sheet === "full"}
 					onClick={() => {
 						if (sheetSwiped.current) {
@@ -455,30 +461,34 @@ export default function TransitExplorer() {
 				<div className="explorer-heading">
 					<div>
 						<h1>
-							{planOpen
-								? "Let’s get there."
-								: cityOpen
-									? "A closer look."
-									: savedOpen
-										? "Saved places."
-										: "Find your ride."}
+							{t(
+								planOpen
+									? "Let’s get there."
+									: cityOpen
+										? "A closer look."
+										: savedOpen
+											? "Saved places."
+											: "Find your ride.",
+							)}
 						</h1>
 						<p>
-							{planOpen
-								? "Bus, bike, walk or car — ranked for you."
-								: cityOpen
-									? "The city, layer by layer."
-									: savedOpen
-										? "Your everyday journeys, one tap away."
-										: "Vilnius is moving. Come along."}
+							{t(
+								planOpen
+									? "Bus, bike, walk or car — ranked for you."
+									: cityOpen
+										? "The city, layer by layer."
+										: savedOpen
+											? "Your everyday journeys, one tap away."
+											: "Vilnius is moving. Come along.",
+							)}
 						</p>
 					</div>
 					<button
 						type="button"
 						className="sheet-size-button"
-						aria-label={
-							sheet === "full" ? "Show more map" : "Expand transit panel"
-						}
+						aria-label={t(
+							sheet === "full" ? "Show more map" : "Expand transit panel",
+						)}
 						onClick={() => setSheet(sheet === "full" ? "half" : "full")}
 					>
 						{sheet === "full" ? (
@@ -504,14 +514,14 @@ export default function TransitExplorer() {
 							setSelection(null);
 							setPreviewTrip(null);
 						}}
-						placeholder="Stop, route or destination"
-						aria-label="Search stops, routes or destinations"
+						placeholder={t("Stop, route or destination")}
+						aria-label={t("Search stops, routes or destinations")}
 					/>
 					{query && (
 						<button
 							type="button"
 							onClick={() => setQuery("")}
-							aria-label="Clear search"
+							aria-label={t("Clear search")}
 						>
 							<X size={16} />
 						</button>
@@ -519,7 +529,7 @@ export default function TransitExplorer() {
 					<button
 						type="button"
 						className={`filter-button ${filtersOpen || routeId || mode !== "all" || nearbyOnly ? "active" : ""}`}
-						aria-label="Route filters"
+						aria-label={t("Route filters")}
 						aria-expanded={filtersOpen}
 						onClick={() => {
 							setFiltersOpen(!filtersOpen);
@@ -530,27 +540,27 @@ export default function TransitExplorer() {
 						<SlidersHorizontal size={19} />
 					</button>
 				</label>
-				<nav className="panel-tabs" aria-label="Explore views">
+				<nav className="panel-tabs" aria-label={t("Explore views")}>
 					<button
 						type="button"
 						aria-pressed={!cityOpen && !planOpen && !savedOpen}
 						onClick={openNearby}
 					>
 						<MapPin size={16} />
-						Nearby
+						{t("Nearby")}
 					</button>
 					<button type="button" aria-pressed={planOpen} onClick={openPlan}>
 						<Route size={16} />
-						Plan
+						{t("Plan")}
 					</button>
 					<button type="button" aria-pressed={cityOpen} onClick={openLayers}>
 						<Layers2 size={16} />
-						Layers
-						<span className="layer-count">{city.enabled.length}</span>
+						{t("Layers")}
+						<span className="layer-count">{t(city.enabled.length)}</span>
 					</button>
 					<button type="button" aria-pressed={savedOpen} onClick={openSaved}>
 						<Star size={16} />
-						Saved
+						{t("Saved")}
 					</button>
 				</nav>
 				<div className="panel-content" ref={panelContent}>
@@ -558,7 +568,7 @@ export default function TransitExplorer() {
 						className="explorer-filters"
 						hidden={!filtersOpen || cityOpen || planOpen}
 					>
-						<fieldset className="mode-tabs" aria-label="Transport type">
+						<fieldset className="mode-tabs" aria-label={t("Transport type")}>
 							{(
 								[
 									["all", "All transport"],
@@ -576,24 +586,24 @@ export default function TransitExplorer() {
 										setRouteId("");
 									}}
 								>
-									{label}
+									{t(label)}
 								</button>
 							))}
 						</fieldset>
 						<div className="filter-row">
 							<label className="route-select">
-								<span className="sr-only">Filter by route</span>
+								<span className="sr-only">{t("Filter by route")}</span>
 								<select
 									value={routeId}
 									onChange={(e) => setRouteId(e.target.value)}
 								>
-									<option value="">Every route</option>
+									<option value="">{t("Every route")}</option>
 									{routes
 										.filter((r) => mode === "all" || r.mode === mode)
 										.map((r) => (
 											<option key={r.id} value={r.id}>
-												{r.name} ·{" "}
-												{r.mode === "trolleybus" ? "Trolleybus" : "Bus"}
+												{t(r.name)} ·{t(" ")}
+												{t(r.mode === "trolleybus" ? "Trolleybus" : "Bus")}
 											</option>
 										))}
 								</select>
@@ -602,7 +612,7 @@ export default function TransitExplorer() {
 								<FavouriteButton
 									active={favourites.saved.routes.includes(routeId)}
 									onClick={() => favourites.toggle("routes", routeId)}
-									label="route"
+									label={t("route")}
 								/>
 							)}
 							<button
@@ -612,7 +622,7 @@ export default function TransitExplorer() {
 								onClick={() => setNearbyOnly((v) => !v)}
 							>
 								<Navigation size={14} />
-								Within 2 km
+								{t("Within 2 km")}
 							</button>
 						</div>
 						<button
@@ -623,21 +633,23 @@ export default function TransitExplorer() {
 						>
 							<LocateFixed size={18} className={locating ? "spin" : ""} />
 							<span>
-								{locating
-									? "Finding your location…"
-									: location
-										? "Update my location"
-										: "Use my location"}
+								{t(
+									locating
+										? "Finding your location…"
+										: location
+											? "Update my location"
+											: "Use my location",
+								)}
 							</span>
 							<ArrowUpRight size={17} />
 						</button>
 					</div>
 					{locationError && (
 						<div className="notice location-notice" role="status">
-							<span>{locationError}</span>
+							<span>{t(locationError)}</span>
 							<button
 								type="button"
-								aria-label="Dismiss location message"
+								aria-label={t("Dismiss location message")}
 								onClick={() => setLocationError(null)}
 							>
 								<X size={16} />
@@ -654,14 +666,16 @@ export default function TransitExplorer() {
 								setLocationError(null);
 							}}
 						>
-							Use map center instead
+							{t("Use map center instead")}
 						</button>
 					)}
 					{(network.error || live.error || network.data?.stale) && (
 						<div className="notice warning" role="status">
-							{network.error ||
-								live.error ||
-								"Using a saved timetable while the source reconnects."}
+							{t(
+								network.error ||
+									live.error ||
+									"Using a saved timetable while the source reconnects.",
+							)}
 							<button
 								type="button"
 								onClick={() => {
@@ -670,7 +684,7 @@ export default function TransitExplorer() {
 								}}
 							>
 								<RefreshCw size={14} />
-								Retry
+								{t("Retry")}
 							</button>
 						</div>
 					)}
@@ -683,20 +697,22 @@ export default function TransitExplorer() {
 									onChange={(e) => setCommunityEnabled(e.target.checked)}
 								/>
 								<MapSymbol kind="community" color="#7343aa" />
-								Community reports · {community.features.length}
+								{t("Community reports · ")}
+								{t(community.features.length)}
 							</label>
-							<p>Rider observations · tap purple markers to read.</p>
+							<p>{t("Rider observations · tap purple markers to read.")}</p>
 							{reports.error && (
 								<p role="status">
-									Community reports unavailable.{" "}
+									{t("Community reports unavailable.")}
+									{t(" ")}
 									<button type="button" onClick={reports.retry}>
-										Retry
+										{t("Retry")}
 									</button>
 								</p>
 							)}
 						</section>
 					)}
-					{favourites.error && <p role="status">{favourites.error}</p>}
+					{favourites.error && <p role="status">{t(favourites.error)}</p>}
 					<div hidden={planOpen || savedOpen}>
 						<CityLayers
 							city={city}
@@ -731,7 +747,7 @@ export default function TransitExplorer() {
 								}}
 							>
 								<ArrowLeft size={15} />
-								Back to nearby
+								{t("Back to nearby")}
 							</button>
 						)}
 						{selection?.type === "stop" ? (
@@ -742,12 +758,15 @@ export default function TransitExplorer() {
 									</span>
 									<div>
 										<span className="eyebrow">
-											Stop {selectedStop?.id ?? selection.id}
+											{t("Stop ")}
+											{t(selectedStop?.id ?? selection.id)}
 										</span>
-										<h2>{selectedStop?.name ?? "Loading stop…"}</h2>
+										<h2>{t(selectedStop?.name ?? "Loading stop…")}</h2>
 										<p>
-											{selectedStop?.description ||
-												"Departures from this platform"}
+											{t(
+												selectedStop?.description ||
+													"Departures from this platform",
+											)}
 										</p>
 									</div>
 								</div>
@@ -760,7 +779,8 @@ export default function TransitExplorer() {
 								)}
 
 								<details className="stop-more-info">
-									<summary>Stop information & community</summary>{" "}
+									<summary>{t("Stop information & community")}</summary>
+									{t(" ")}
 									{selectedStop && (
 										<StopCommunity
 											stop={selectedStop}
@@ -773,14 +793,16 @@ export default function TransitExplorer() {
 									)}
 									{selectedStop && (
 										<p className="helper-text" role="status">
-											{stopRoutes.error
-												? "Route outlines unavailable. Try again."
-												: !stopRoutes.data
-													? "Loading routes from this stop…"
-													: `${stopRoutes.data.stale ? "Cached timetable · " : ""}Showing routes from this platform. Check departures for service times.`}
+											{t(
+												stopRoutes.error
+													? "Route outlines unavailable. Try again."
+													: !stopRoutes.data
+														? "Loading routes from this stop…"
+														: `${stopRoutes.data.stale ? "Cached timetable · " : ""}Showing routes from this platform. Check departures for service times.`,
+											)}
 											{stopRoutes.error && (
 												<button type="button" onClick={stopRoutes.retry}>
-													Retry
+													{t("Retry")}
 												</button>
 											)}
 										</p>
@@ -792,32 +814,35 @@ export default function TransitExplorer() {
 									))}
 								</div>
 								<div className="section-heading">
-									<h3>Upcoming departures</h3>
-									<span>Vilnius time</span>
+									<h3>{t("Upcoming departures")}</h3>
+									<span>{t("Vilnius time")}</span>
 								</div>
 								<details className="departure-explanation">
-									<summary>About arrival times</summary>
+									<summary>{t("About arrival times")}</summary>
 									<p className="helper-text">
-										Live estimates use reported schedule deviation. Scheduled
-										times appear when live data is unavailable.
+										{t(
+											"Live estimates use reported schedule deviation. Scheduled times appear when live data is unavailable.",
+										)}
 									</p>
 								</details>
 								{board.error && (
 									<div className="notice warning" role="status">
-										Couldn’t refresh departures. Any previous estimates may be
-										outdated.
+										{t(
+											"Couldn’t refresh departures. Any previous estimates may be outdated.",
+										)}
 										<button type="button" onClick={board.retry}>
-											Try again
+											{t("Try again")}
 										</button>
 									</div>
 								)}
 								{!board.data && !board.error && (
-									<p className="loading-text">Loading departures…</p>
+									<p className="loading-text">{t("Loading departures…")}</p>
 								)}
 								{board.data?.stale && (
 									<p className="notice">
-										Some sources are unavailable; times may be scheduled or
-										based on a saved timetable.
+										{t(
+											"Some sources are unavailable; times may be scheduled or based on a saved timetable.",
+										)}
 									</p>
 								)}
 								{board.data?.departures
@@ -847,14 +872,16 @@ export default function TransitExplorer() {
 											>
 												<RouteBadge route={routeById.get(d.routeId)} />
 												<span className="row-main">
-													<strong>{d.destination}</strong>
+													<strong>{t(d.destination)}</strong>
 													<small>
-														{isLive
-															? "Live estimate"
-															: d.live
-																? "Last estimate · outdated"
-																: "Scheduled"}{" "}
-														· {timeFormat.format(d.scheduledAt)}
+														{t(
+															isLive
+																? "Live estimate"
+																: d.live
+																	? "Last estimate · outdated"
+																	: "Scheduled",
+														)}
+														{t(" ")}· {t(timeFormat.format(d.scheduledAt))}
 													</small>
 													{isLive && (
 														<DepartureCrowding report={crowding} now={now} />
@@ -864,11 +891,13 @@ export default function TransitExplorer() {
 													className={`departure-time ${isLive ? "live" : ""}`}
 												>
 													<strong>
-														{Math.max(
-															1,
-															Math.ceil((d.estimatedAt - now) / 60_000),
+														{t(
+															Math.max(
+																1,
+																Math.ceil((d.estimatedAt - now) / 60_000),
+															),
 														)}
-														<small> min</small>
+														<small>{t(" min")}</small>
 													</strong>
 													{isLive && <Radio size={12} />}
 												</span>
@@ -879,17 +908,18 @@ export default function TransitExplorer() {
 									!board.data.departures.some((d) => d.estimatedAt >= now) && (
 										<div className="empty-state">
 											<Clock3 size={25} />
-											<h3>No upcoming departures</h3>
+											<h3>{t("No upcoming departures")}</h3>
 											<p>
-												No boarding services are scheduled here in the next 24
-												hours.
+												{t(
+													"No boarding services are scheduled here in the next 24 hours.",
+												)}
 											</p>
 										</div>
 									)}
 
 								{previewTrip && (
 									<p className="helper-text">
-										Selected departure’s route is highlighted on the map.
+										{t("Selected departure’s route is highlighted on the map.")}
 									</p>
 								)}
 							</>
@@ -903,16 +933,20 @@ export default function TransitExplorer() {
 													? routeById.get(selectedVehicle.routeId)
 													: undefined
 											}
-											label={selectedVehicle.route}
+											label={t(selectedVehicle.route)}
 										/>
 										<div>
 											<span className="eyebrow">
-												{selectedVehicle.mode === "bus" ? "Bus" : "Trolleybus"}{" "}
-												· {selectedVehicle.number}
+												{t(
+													selectedVehicle.mode === "bus" ? "Bus" : "Trolleybus",
+												)}
+												{t(" ")}· {t(selectedVehicle.number)}
 											</span>
 											<h2>
-												{selectedVehicle.destination ||
-													"Destination unavailable"}
+												{t(
+													selectedVehicle.destination ||
+														"Destination unavailable",
+												)}
 											</h2>
 										</div>
 									</div>
@@ -970,23 +1004,25 @@ export default function TransitExplorer() {
 											/>
 										))}
 									<details className="vehicle-service-details">
-										<summary>Vehicle & service details</summary>
+										<summary>{t("Vehicle & service details")}</summary>
 										<div className="vehicle-metrics">
 											<div>
-												<span>Speed</span>
+												<span>{t("Speed")}</span>
 												<strong>
-													{selectedVehicle.speed}
+													{t(selectedVehicle.speed)}
 													<small> km/h</small>
 												</strong>
 											</div>
 											<div>
-												<span>Schedule deviation</span>
+												<span>{t("Schedule deviation")}</span>
 												<strong>
-													{!selectedFresh || selectedVehicle.delay === null
-														? "Unknown"
-														: Math.abs(selectedVehicle.delay) < 60
-															? "On time"
-															: `${Math.round(Math.abs(selectedVehicle.delay) / 60)} min ${selectedVehicle.delay > 0 ? "late" : "early"}`}
+													{t(
+														!selectedFresh || selectedVehicle.delay === null
+															? "Unknown"
+															: Math.abs(selectedVehicle.delay) < 60
+																? "On time"
+																: `${Math.round(Math.abs(selectedVehicle.delay) / 60)} min ${selectedVehicle.delay > 0 ? "late" : "early"}`,
+													)}
 												</strong>
 											</div>
 										</div>
@@ -997,12 +1033,15 @@ export default function TransitExplorer() {
 										<span
 											className={`status-dot ${selectedFresh ? "" : "offline"}`}
 										/>
-										{selectedFresh ? "Live position" : "Last known position"} ·{" "}
-										{Math.max(
-											0,
-											Math.floor((now - selectedVehicle.measuredAt) / 1000),
+										{t(selectedFresh ? "Live position" : "Last known position")}
+										{t(" ")}·{t(" ")}
+										{t(
+											Math.max(
+												0,
+												Math.floor((now - selectedVehicle.measuredAt) / 1000),
+											),
 										)}
-										s ago
+										{t("s ago")}
 									</p>
 									<button
 										className="locate-button secondary"
@@ -1010,20 +1049,24 @@ export default function TransitExplorer() {
 										onClick={() => focusOn(selectedVehicle)}
 									>
 										<Navigation size={16} />
-										Center on this vehicle
+										{t("Center on this vehicle")}
 									</button>
 									<div className="section-heading">
-										<h3>Stops on this trip</h3>
-										<span>{trip.data?.stops.length ?? "—"} stops</span>
+										<h3>{t("Stops on this trip")}</h3>
+										<span>
+											{t(trip.data?.stops.length ?? "—")}
+											{t(" stops")}
+										</span>
 									</div>
 									{!selectedVehicle.tripId && (
 										<p className="notice">
-											This vehicle has no matching trip information. Its
-											position is still shown.
+											{t(
+												"This vehicle has no matching trip information. Its position is still shown.",
+											)}
 										</p>
 									)}
 									{selectedVehicle.tripId && !trip.data && !trip.error && (
-										<p className="loading-text">Loading route…</p>
+										<p className="loading-text">{t("Loading route…")}</p>
 									)}
 									{trip.data?.stops.map((stop, index) => (
 										<button
@@ -1032,8 +1075,8 @@ export default function TransitExplorer() {
 											key={`${stop.id}-${index}`}
 											onClick={() => selectStop(stop.id)}
 										>
-											<span className="stop-sequence">{index + 1}</span>
-											<span>{stop.name}</span>
+											<span className="stop-sequence">{t(index + 1)}</span>
+											<span>{t(stop.name)}</span>
 											<ChevronRight size={15} />
 										</button>
 									))}
@@ -1041,10 +1084,11 @@ export default function TransitExplorer() {
 							) : (
 								<div className="empty-state">
 									<BusFront size={25} />
-									<h3>Vehicle no longer reporting</h3>
+									<h3>{t("Vehicle no longer reporting")}</h3>
 									<p>
-										It may have finished its trip. Choose another vehicle from
-										the map.
+										{t(
+											"It may have finished its trip. Choose another vehicle from the map.",
+										)}
 									</p>
 								</div>
 							)
@@ -1068,14 +1112,14 @@ export default function TransitExplorer() {
 						) : (
 							<>
 								<div className="section-heading">
-									<h2>{needle ? "Matching stops" : "Nearby stops"}</h2>
+									<h2>{t(needle ? "Matching stops" : "Nearby stops")}</h2>
 									<span>
-										{location ? "From your location" : "From map center"}
+										{t(location ? "From your location" : "From map center")}
 									</span>
 								</div>
 								{!network.data && !network.error && (
 									<p className="loading-text">
-										Loading Vilnius stops and routes…
+										{t("Loading Vilnius stops and routes…")}
 									</p>
 								)}
 								{nearbyStops.map(({ stop, distance: metresAway }) => (
@@ -1089,10 +1133,11 @@ export default function TransitExplorer() {
 											<MapPin size={19} />
 										</span>
 										<span className="row-main">
-											<strong>{stop.name}</strong>
+											<strong>{t(stop.name)}</strong>
 											<small>
-												{metres(metresAway)} away
-												{stop.description ? ` · ${stop.description}` : ""}
+												{t(metres(metresAway))}
+												{t(" away")}
+												{t(stop.description ? ` · ${stop.description}` : "")}
 											</small>
 											<span className="stop-route-list">
 												{stop.routeIds.slice(0, 6).map((id) => (
@@ -1100,7 +1145,7 @@ export default function TransitExplorer() {
 												))}
 												{stop.routeIds.length > 6 && (
 													<span className="more-routes">
-														+{stop.routeIds.length - 6}
+														+{t(stop.routeIds.length - 6)}
 													</span>
 												)}
 											</span>
@@ -1111,20 +1156,23 @@ export default function TransitExplorer() {
 								{network.data && !nearbyStops.length && (
 									<div className="empty-state">
 										<Search size={24} />
-										<h3>No matching stops</h3>
-										<p>Try another name or clear the route filters.</p>
+										<h3>{t("No matching stops")}</h3>
+										<p>{t("Try another name or clear the route filters.")}</p>
 										<button
 											type="button"
 											className="text-button"
 											onClick={resetFilters}
 										>
-											Clear filters
+											{t("Clear filters")}
 										</button>
 									</div>
 								)}
 								<div className="section-heading vehicles-heading">
-									<h2>Vehicles nearby</h2>
-									<span>{filteredVehicles.length} matching</span>
+									<h2>{t("Vehicles nearby")}</h2>
+									<span>
+										{t(filteredVehicles.length)}
+										{t(" matching")}
+									</span>
 								</div>
 								{nearbyVehicles.map(({ vehicle, distance: metresAway }) => (
 									<button
@@ -1139,17 +1187,21 @@ export default function TransitExplorer() {
 													? routeById.get(vehicle.routeId)
 													: undefined
 											}
-											label={vehicle.route}
+											label={t(vehicle.route)}
 										/>
 										<span className="row-main">
 											<strong>
-												{vehicle.destination || "Destination unavailable"}
+												{t(vehicle.destination || "Destination unavailable")}
 											</strong>
 											<small>
-												{metres(metresAway)} away ·{" "}
-												{freshVehicle(vehicle, now) && !feedStale
-													? "Live"
-													: "Last known position"}
+												{t(metres(metresAway))}
+												{t(" away ·")}
+												{t(" ")}
+												{t(
+													freshVehicle(vehicle, now) && !feedStale
+														? "Live"
+														: "Last known position",
+												)}
 											</small>
 										</span>
 										<ChevronRight size={15} />
@@ -1157,9 +1209,9 @@ export default function TransitExplorer() {
 								))}
 								{live.data && !nearbyVehicles.length && (
 									<p className="notice">
-										No vehicles match this area or filter right now.
+										{t("No vehicles match this area or filter right now.")}
 										<button type="button" onClick={resetFilters}>
-											Show all vehicles
+											{t("Show all vehicles")}
 										</button>
 									</p>
 								)}
@@ -1167,9 +1219,9 @@ export default function TransitExplorer() {
 						)}
 						{trip.error && selection && (
 							<div className="notice warning">
-								Route details are unavailable.
+								{t("Route details are unavailable.")}
 								<button type="button" onClick={trip.retry}>
-									Retry route
+									{t("Retry route")}
 								</button>
 							</div>
 						)}
@@ -1194,22 +1246,24 @@ export default function TransitExplorer() {
 				<footer className="panel-footer">
 					<span className={`status-dot ${feedStale ? "offline" : ""}`} />
 					<span>
-						{!live.data
-							? "Connecting to JUDU…"
-							: feedStale
-								? "Feed interrupted · showing last update"
-								: `${freshCount} vehicles reporting live`}
+						{t(
+							!live.data
+								? "Connecting to JUDU…"
+								: feedStale
+									? "Feed interrupted · showing last update"
+									: `${freshCount} vehicles reporting live`,
+						)}
 					</span>
 					<button
 						type="button"
-						aria-label="Refresh vehicle positions"
+						aria-label={t("Refresh vehicle positions")}
 						onClick={live.retry}
 					>
 						<RefreshCw size={14} />
 					</button>
 				</footer>
 			</aside>
-			<section className="map-panel" aria-label="Map and live vehicles">
+			<section className="map-panel" aria-label={t("Map and live vehicles")}>
 				<TransitMap
 					community={community}
 					city={city.collection}
@@ -1268,22 +1322,24 @@ export default function TransitExplorer() {
 					<div className="city-pill">
 						<MapPin size={15} />
 						<strong>Vilnius</strong>
-						<span>Lithuania</span>
+						<span>{t("Lithuania")}</span>
 					</div>
 					<div className={`live-pill ${feedStale ? "is-stale" : ""}`}>
 						<span className={`status-dot ${feedStale ? "offline" : ""}`} />
-						{!live.data
-							? "Connecting"
-							: feedStale
-								? "Feed delayed"
-								: "Live transport"}
+						{t(
+							!live.data
+								? "Connecting"
+								: feedStale
+									? "Feed delayed"
+									: "Live transport",
+						)}
 					</div>
 				</div>
 				<div className="map-actions">
 					<button
 						type="button"
 						className="map-report-button"
-						aria-label="Report bus crowding"
+						aria-label={t("Report bus crowding")}
 						onClick={() => setReportTarget({ vehicle: selectedVehicle })}
 					>
 						<MessageCirclePlus size={22} />
@@ -1291,7 +1347,7 @@ export default function TransitExplorer() {
 					<button
 						type="button"
 						className="map-location"
-						aria-label="Find my location"
+						aria-label={t("Find my location")}
 						onClick={locate}
 						disabled={locating}
 					>
@@ -1300,39 +1356,39 @@ export default function TransitExplorer() {
 					<button
 						type="button"
 						className="map-layer-button"
-						aria-label="Open city layers"
+						aria-label={t("Open city layers")}
 						onClick={openLayers}
 					>
 						<Layers2 size={20} />
-						<span>{city.enabled.length}</span>
+						<span>{t(city.enabled.length)}</span>
 					</button>
 				</div>
 				<div className="map-legend">
 					{Object.entries(SERVICE_COLORS).map(([service, color]) => (
 						<span key={service}>
 							<i style={{ background: color }} />
-							{
+							{t(
 								{
 									express: "Express",
 									bus: "Bus",
 									trolleybus: "Trolley",
 									night: "Night",
 									river: "River",
-								}[service]
-							}
+								}[service],
+							)}
 						</span>
 					))}
 					<span>
 						<MapSymbol kind="stop" color="#414454" />
-						Stop
+						{t("Stop")}
 					</span>
 					{city.enabled.includes("shelters") && (
 						<span>
 							<MapSymbol kind="shelters" color="#a74716" />
-							Shelter
+							{t("Shelter")}
 						</span>
 					)}
-					<span className="legend-faded">Faded = older position</span>
+					<span className="legend-faded">{t("Faded = older position")}</span>
 				</div>
 				<a
 					className="data-credit"
@@ -1340,7 +1396,7 @@ export default function TransitExplorer() {
 					target="_blank"
 					rel="noreferrer"
 				>
-					Transit data: JUDU / stops.lt ↗
+					{t("Transit data: JUDU / stops.lt ↗")}
 				</a>
 			</section>
 			{stopReport && (
@@ -1364,7 +1420,7 @@ export default function TransitExplorer() {
 					}}
 				/>
 			)}
-			<nav className="mobile-dock" aria-label="Map views">
+			<nav className="mobile-dock" aria-label={t("Map views")}>
 				<button
 					type="button"
 					aria-pressed={sheet === "peek"}
@@ -1374,7 +1430,7 @@ export default function TransitExplorer() {
 					}}
 				>
 					<MapIcon size={21} />
-					<span>Map</span>
+					<span>{t("Map")}</span>
 				</button>
 				<button
 					type="button"
@@ -1384,7 +1440,7 @@ export default function TransitExplorer() {
 					onClick={openNearby}
 				>
 					<BusFront size={21} />
-					<span>Nearby</span>
+					<span>{t("Nearby")}</span>
 				</button>
 				<button
 					type="button"
@@ -1392,7 +1448,7 @@ export default function TransitExplorer() {
 					onClick={openPlan}
 				>
 					<Route size={21} />
-					<span>Plan</span>
+					<span>{t("Plan")}</span>
 				</button>
 				<button
 					type="button"
@@ -1400,7 +1456,7 @@ export default function TransitExplorer() {
 					onClick={openLayers}
 				>
 					<Layers2 size={21} />
-					<span>Layers</span>
+					<span>{t("Layers")}</span>
 				</button>
 				<button
 					type="button"
@@ -1408,7 +1464,7 @@ export default function TransitExplorer() {
 					onClick={openSaved}
 				>
 					<Star size={21} />
-					<span>Saved</span>
+					<span>{t("Saved")}</span>
 				</button>
 			</nav>
 			{welcome && (

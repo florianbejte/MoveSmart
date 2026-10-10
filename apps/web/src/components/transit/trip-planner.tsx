@@ -29,6 +29,8 @@ import {
 	Zap,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { placeKindLabel } from "@/lib/i18n/core";
+import { useT } from "@/lib/i18n/react";
 import {
 	DISRUPTION_INFO,
 	type Disruption,
@@ -178,6 +180,8 @@ export function TripPlanner({
 	onEditProfile: () => void;
 	now: number;
 }) {
+	const t = useT();
+
 	const account = useAccount();
 	const [query, setQuery] = useState("");
 	const [to, setTo] = useState<Place | null>(null);
@@ -426,7 +430,11 @@ export function TripPlanner({
 		return () => controller.abort();
 	}, [selectedKey, hidden]);
 	return (
-		<section className="trip-planner" hidden={hidden} aria-label="Plan a trip">
+		<section
+			className="trip-planner"
+			hidden={hidden}
+			aria-label={t("Plan a trip")}
+		>
 			<div className="plan-points">
 				<div className="plan-point">
 					<span className="point-dot from" />
@@ -438,8 +446,8 @@ export function TripPlanner({
 								autoFocus
 								value={fromQuery}
 								onChange={(e) => setFromQuery(e.target.value)}
-								placeholder="From? Address, place or stop"
-								aria-label="Start point"
+								placeholder={t("From? Address, place or stop")}
+								aria-label={t("Start point")}
 							/>
 						</label>
 					) : (
@@ -447,9 +455,9 @@ export function TripPlanner({
 							type="button"
 							className="point-text point-edit"
 							onClick={() => setEditingFrom(true)}
-							aria-label="Change start point"
+							aria-label={t("Change start point")}
 						>
-							<small>From</small>
+							<small>{t("From")}</small>
 							{fromPlace?.name ??
 								(usingLocation ? "My location" : "City centre · tap to change")}
 						</button>
@@ -461,7 +469,7 @@ export function TripPlanner({
 								setEditingFrom(false);
 								setFromQuery("");
 							}}
-							aria-label="Cancel"
+							aria-label={t("Cancel")}
 						>
 							<X size={16} />
 						</button>
@@ -470,7 +478,7 @@ export function TripPlanner({
 							type="button"
 							onClick={() => chooseFrom(null)}
 							disabled={locating}
-							aria-label="Start from my location"
+							aria-label={t("Start from my location")}
 						>
 							<LocateFixed size={16} className={locating ? "spin" : ""} />
 						</button>
@@ -481,7 +489,7 @@ export function TripPlanner({
 						type="button"
 						className="plan-swap"
 						onClick={swap}
-						aria-label="Swap start and destination"
+						aria-label={t("Swap start and destination")}
 					>
 						<ArrowUpDown size={15} />
 					</button>
@@ -491,8 +499,8 @@ export function TripPlanner({
 					{to ? (
 						<>
 							<span className="point-text">
-								<small>To</small>
-								{to.name}
+								<small>{t("To")}</small>
+								{t(to.name)}
 							</span>
 							<button
 								type="button"
@@ -502,7 +510,7 @@ export function TripPlanner({
 									setGoing(null);
 									onPath(null);
 								}}
-								aria-label="Change destination"
+								aria-label={t("Change destination")}
 							>
 								<X size={16} />
 							</button>
@@ -513,8 +521,8 @@ export function TripPlanner({
 							<input
 								value={query}
 								onChange={(e) => setQuery(e.target.value)}
-								placeholder="Where to? Address, place or stop"
-								aria-label="Destination"
+								placeholder={t("Where to? Address, place or stop")}
+								aria-label={t("Destination")}
 							/>
 						</label>
 					)}
@@ -522,18 +530,23 @@ export function TripPlanner({
 			</div>
 			<details className="journey-settings">
 				<summary>
-					Trip options{" "}
+					{t("Trip options")}
+					{t(" ")}
 					<span>
-						Up to {maxWalk} min walking <ChevronDown size={14} />
+						{t("Up to ")}
+						{t(maxWalk)}
+						{t(" min walking ")}
+						<ChevronDown size={14} />
 					</span>
 				</summary>
 
 				<label className="plan-walk-budget">
 					<span>
-						<Footprints size={16} /> Walk to / from a stop
+						<Footprints size={16} />
+						{t(" Walk to / from a stop")}
 					</span>
 					<select
-						aria-label="Maximum walk at each end"
+						aria-label={t("Maximum walk at each end")}
 						value={maxWalk}
 						onChange={(e) => {
 							setMaxWalk(Number(e.target.value));
@@ -542,7 +555,9 @@ export function TripPlanner({
 					>
 						{[10, 15, 20, 30].map((n) => (
 							<option key={n} value={n}>
-								Up to {n} min each end
+								{t("Up to ")}
+								{t(n)}
+								{t(" min each end")}
 							</option>
 						))}
 					</select>
@@ -551,11 +566,12 @@ export function TripPlanner({
 					type="button"
 					className="profile-chip"
 					onClick={onEditProfile}
-					aria-label="Edit travel profile"
+					aria-label={t("Edit travel profile")}
 				>
 					<Sparkles size={15} />
 					<span>
-						Ranked for <strong>{persona(profile)}</strong>
+						{t("Ranked for ")}
+						<strong>{t(persona(profile))}</strong>
 					</span>
 					<Pencil size={13} />
 				</button>
@@ -563,19 +579,22 @@ export function TripPlanner({
 					<Leaf size={15} />
 					{account.impact.trips > 0 ? (
 						<span>
-							You’ve saved <strong>{kg(account.impact.grams)} CO₂</strong> in{" "}
-							{account.impact.trips} green trip
-							{account.impact.trips === 1 ? "" : "s"}
+							{t("You’ve saved ")}
+							<strong>{t(kg(account.impact.grams))} CO₂</strong>
+							{t(" in")}
+							{t(" ")}
+							{t(`Green trips: ${account.impact.trips}`)}
 						</span>
 					) : (
 						<span>
-							Every bus, walk or bike trip instead of a car saves CO₂ — we’ll
-							count yours.
+							{t(
+								"Every bus, walk or bike trip instead of a car saves CO₂ — we’ll count yours.",
+							)}
 						</span>
 					)}
 				</p>
 			</details>
-			<fieldset className="journey-modes" aria-label="Travel mode">
+			<fieldset className="journey-modes" aria-label={t("Travel mode")}>
 				{[
 					{ id: "transit", label: "Transit", icon: BusFront },
 					{ id: "walk", label: "Walk", icon: Footprints },
@@ -594,14 +613,15 @@ export function TripPlanner({
 						}}
 					>
 						<ModeIcon size={17} />
-						{label}
+						{t(label)}
 					</button>
 				))}
 			</fieldset>
 			{to && plan.data?.walkingApproximate && (
 				<p className="helper-text" role="status">
-					Walking directions are unavailable for some stops. Those walking times
-					are approximate.
+					{t(
+						"Walking directions are unavailable for some stops. Those walking times are approximate.",
+					)}
 				</p>
 			)}
 			{to &&
@@ -609,8 +629,9 @@ export function TripPlanner({
 				!plan.data.rides.length &&
 				!plan.data.transfers?.length && (
 					<p className="helper-text">
-						No direct or one-change bus journey found within this walking
-						budget. Try allowing a longer walk.
+						{t(
+							"No direct or one-change bus journey found within this walking budget. Try allowing a longer walk.",
+						)}
 					</p>
 				)}
 			{editingFrom && (
@@ -618,8 +639,8 @@ export function TripPlanner({
 					<button type="button" onClick={() => chooseFrom(null)}>
 						<LocateFixed size={15} />
 						<span className="suggestion-text">
-							<span>My current location</span>
-							<small>Uses your device’s location</small>
+							<span>{t("My current location")}</span>
+							<small>{t("Uses your device’s location")}</small>
 						</span>
 					</button>
 					{!fromQuery && places.length > 0 && (
@@ -635,22 +656,23 @@ export function TripPlanner({
 					)}
 					<Suggestions search={toSearch} onChoose={choose} />
 					<p className="helper-text">
-						We compare walking, bikes, scooters, live buses, driving and taxis —
-						and rank them for you.
+						{t(
+							"We compare walking, bikes, scooters, live buses, driving and taxis — and rank them for you.",
+						)}
 					</p>
 				</div>
 			)}
 			{to && tooClose && (
-				<p className="notice">You’re practically there — just walk.</p>
+				<p className="notice">{t("You’re practically there — just walk.")}</p>
 			)}
 			{to && !tooClose && !plan.data && !plan.error && (
-				<p className="loading-text">Comparing every way to get there…</p>
+				<p className="loading-text">{t("Comparing every way to get there…")}</p>
 			)}
 			{plan.error && (
 				<div className="notice warning">
-					Couldn’t check live buses right now.
+					{t("Couldn’t check live buses right now.")}
 					<button type="button" onClick={plan.retry}>
-						Try again
+						{t("Try again")}
 					</button>
 				</div>
 			)}
@@ -672,26 +694,33 @@ export function TripPlanner({
 							onClick={() => setGoing(null)}
 						>
 							<ArrowLeft size={15} />
-							All options
+							{t("All options")}
 						</button>
 					)}
 					{!selected && (
 						<div className="journey-list-heading">
 							<h3>
-								{travelMode === "transit" ? "Suggested journeys" : "Ways to go"}
+								{t(
+									travelMode === "transit"
+										? "Suggested journeys"
+										: "Ways to go",
+								)}
 							</h3>
-							<span>Leave now</span>
+							<span>{t("Leave now")}</span>
 						</div>
 					)}
 					{!selected && !filteredOptions.length && (
 						<p className="notice">
-							No {travelMode === "all" ? "suitable" : travelMode} journeys
-							found. Try another mode or adjust Trip options.
+							{t(
+								"No journeys match these options. Try another mode or adjust Trip options.",
+							)}
 						</p>
 					)}
 					{!selected && usable.length > 0 && (
 						<p className="formula-lead">
-							Ranked for your needs and answers — with greener ways first.
+							{t(
+								" Ranked for your needs and answers — with greener ways first. ",
+							)}
 						</p>
 					)}
 					<ol className="plan-options">
@@ -737,9 +766,11 @@ export function TripPlanner({
 							className="journey-more"
 							onClick={() => setShowMore(!showMore)}
 						>
-							{showMore
-								? "Show fewer journeys"
-								: `Show ${filteredOptions.length - 3} more journeys`}
+							{t(
+								showMore
+									? "Show fewer journeys"
+									: `Show ${filteredOptions.length - 3} more journeys`,
+							)}
 							<ChevronDown size={16} />
 						</button>
 					)}
@@ -751,7 +782,8 @@ export function TripPlanner({
 								aria-expanded={showExcluded}
 								onClick={() => setShowExcluded(!showExcluded)}
 							>
-								Not suggested for you ({excluded.length})
+								{t("Not suggested for you (")}
+								{t(excluded.length)})
 								<ChevronDown size={14} />
 							</button>
 							{showExcluded && (
@@ -761,8 +793,8 @@ export function TripPlanner({
 										return (
 											<li key={o.id}>
 												<Icon size={15} />
-												<strong>{o.label}</strong>
-												<span>{o.excluded}</span>
+												<strong>{t(o.label)}</strong>
+												<span>{t(o.excluded)}</span>
 											</li>
 										);
 									})}
@@ -780,12 +812,11 @@ export function TripPlanner({
 						]}
 					/>
 					<details className="journey-settings">
-						<summary>About these results</summary>
+						<summary>{t("About these results")}</summary>
 						<p className="helper-text">
-							Bus search includes direct journeys and one change. Walks between
-							transfer stops are approximate. Bus times are live where vehicles
-							report them. Driving, taxi and shared-vehicle times and prices are
-							Vilnius estimates.
+							{t(
+								"Bus search includes direct journeys and one change. Walks between transfer stops are approximate. Bus times are live where vehicles report them. Driving, taxi and shared-vehicle times and prices are Vilnius estimates.",
+							)}
 						</p>
 					</details>
 				</>
@@ -820,6 +851,8 @@ function OptionCard({
 	onGo: () => void;
 	trip: { from: Position; to: Place };
 }) {
+	const t = useT();
+
 	const [expanded, setExpanded] = useState(false);
 	const Icon = ICONS[o.mode];
 	const ride = legs?.[0];
@@ -834,21 +867,23 @@ function OptionCard({
 					className="journey-summary"
 					aria-expanded={false}
 					onClick={() => setExpanded(true)}
-					aria-label={`View ${o.label}, ${o.minutes} minutes`}
+					aria-label={t(`View ${o.label}, ${o.minutes} minutes`)}
 				>
 					<div className="journey-summary-top">
 						<span>
-							{best
-								? "Suggested"
-								: o.mode === "transit"
-									? change
-										? "1 change"
-										: "Direct"
-									: o.label}
+							{t(
+								best
+									? "Suggested"
+									: o.mode === "transit"
+										? change
+											? "1 change"
+											: "Direct"
+										: o.label,
+							)}
 						</span>
 						<strong>
-							{o.minutes}
-							<small> min</small>
+							{t(o.minutes)}
+							<small>{t(" min")}</small>
 						</strong>
 					</div>
 					<div className="journey-track">
@@ -856,7 +891,7 @@ function OptionCard({
 							<>
 								<span className="journey-walk">
 									<Footprints size={17} />
-									<small>{ride.walkToMinutes ?? ""}</small>
+									<small>{t(ride.walkToMinutes ?? "")}</small>
 								</span>
 								<span className="journey-dots" />
 								{legs?.map((leg, i) => (
@@ -873,7 +908,7 @@ function OptionCard({
 											}}
 										>
 											<BusFront size={16} />
-											{routes.get(leg.routeId)?.name}
+											{t(routes.get(leg.routeId)?.name)}
 										</span>
 									</Fragment>
 								))}
@@ -885,7 +920,7 @@ function OptionCard({
 								<span className={`journey-mode-icon mode-${o.mode}`}>
 									<Icon size={21} />
 								</span>
-								<strong>{o.label}</strong>
+								<strong>{t(o.label)}</strong>
 							</>
 						)}
 					</div>
@@ -894,24 +929,26 @@ function OptionCard({
 							{ride ? (
 								<>
 									<strong>
-										{leaveIn <= 0 ? "Leave now" : `Leave in ${leaveIn} min`}
+										{t(leaveIn <= 0 ? "Leave now" : `Leave in ${leaveIn} min`)}
 									</strong>
 									{ride.live && <Radio size={12} />}
 								</>
 							) : (
 								<strong>
-									{o.parts.walk ? `${o.parts.walk} min walk` : "Ready to go"}
+									{t(o.parts.walk ? `${o.parts.walk} min walk` : "Ready to go")}
 								</strong>
 							)}
 							<small>
-								{ride ? `${o.parts.walk} min walk · ` : ""}
-								{o.cost === 0
-									? "Free"
-									: `€${(top?.price ?? o.cost).toFixed(2)}`}
+								{t(ride ? `${o.parts.walk} min walk · ` : "")}
+								{t(
+									o.cost === 0
+										? "Free"
+										: `€${(top?.price ?? o.cost).toFixed(2)}`,
+								)}
 							</small>
 						</span>
 						<span className="journey-arrival">
-							{time.format(o.arriveAt)}
+							{t(time.format(o.arriveAt))}
 							<ArrowRight size={17} />
 						</span>
 					</div>
@@ -928,16 +965,19 @@ function OptionCard({
 					aria-expanded={true}
 					onClick={() => setExpanded(false)}
 				>
-					Hide details <ChevronDown size={15} />
+					{t("Hide details ")}
+					<ChevronDown size={15} />
 				</button>
 			)}
 			{best && (
 				<span className={`best-tag ${o.green ? "green" : ""}`}>
-					{o.promoted === "greener"
-						? "Greener way"
-						: o.green
-							? "Best for you & Vilnius"
-							: "Best for you"}
+					{t(
+						o.promoted === "greener"
+							? "Greener way"
+							: o.green
+								? "Best for you & Vilnius"
+								: "Best for you",
+					)}
 				</span>
 			)}
 			<div className="plan-option-main">
@@ -949,50 +989,62 @@ function OptionCard({
 				</span>
 				<span className="row-main">
 					<strong>
-						{o.label}
-						{ride && !change && <small> → {ride.destination}</small>}
+						{t(o.label)}
+						{ride && !change && <small> → {t(ride.destination)}</small>}
 					</strong>
 					<small>
-						{change
-							? `Change at ${legs?.[0].toStop}`
-							: ride
-								? `${ride.fromStop} → ${ride.toStop} · ${ride.stops} stops`
-								: (o.notes[0] ?? "")}
+						{t(
+							change
+								? `Change at ${legs?.[0].toStop}`
+								: ride
+									? `${ride.fromStop} → ${ride.toStop} · ${ride.stops} stops`
+									: (o.notes[0] ?? ""),
+						)}
 					</small>
 				</span>
 				<span className="plan-time">
 					<strong>
-						{o.minutes}
-						<small> min</small>
+						{t(o.minutes)}
+						<small>{t(" min")}</small>
 					</strong>
-					<small>arrive {time.format(o.arriveAt)}</small>
+					<small>
+						{t("arrive ")}
+						{t(time.format(o.arriveAt))}
+					</small>
 				</span>
 			</div>
 			<div className="plan-facts">
 				{o.mode === "transit" && !o.estimated && (
 					<span className={ride?.live ? "live" : ""}>
 						{ride?.live && <Radio size={11} />}
-						{leaveIn <= 0 ? "Leave now" : `Leave in ${leaveIn} min`}
+						{t(leaveIn <= 0 ? "Leave now" : `Leave in ${leaveIn} min`)}
 					</span>
 				)}
 				{o.parts.walk > 0 && (
 					<span>
 						<Footprints size={11} />
-						{o.parts.walk} min walk
+						{t(o.parts.walk)}
+						{t(" min walk")}
 					</span>
 				)}
 				{o.parts.wait > 0 && o.mode !== "transit" && (
-					<span>{o.parts.wait} min wait</span>
+					<span>
+						{t(o.parts.wait)}
+						{t(" min wait")}
+					</span>
 				)}
 				<span>
-					{o.cost === 0
-						? "Free"
-						: `${o.quotes ? "from " : ""}€${(top?.price ?? o.cost).toFixed(2)}`}
+					{t(
+						o.cost === 0
+							? "Free"
+							: `${o.quotes ? "from " : ""}€${(top?.price ?? o.cost).toFixed(2)}`,
+					)}
 				</span>
 				{o.green && o.co2Saved >= 50 ? (
 					<span className="co2-good">
 						<Leaf size={11} />
-						Saves {kg(o.co2Saved)} CO₂
+						{t("Saves ")}
+						{t(kg(o.co2Saved))} CO₂
 					</span>
 				) : (
 					<span
@@ -1003,7 +1055,7 @@ function OptionCard({
 						}
 					>
 						<Leaf size={11} />
-						{kg(o.co2)} CO₂
+						{t(kg(o.co2))} CO₂
 					</span>
 				)}
 			</div>
@@ -1012,7 +1064,7 @@ function OptionCard({
 			{o.reasons.length > 0 && (
 				<ul className="plan-reasons">
 					{o.reasons.slice(0, best || going ? 4 : 2).map((r) => (
-						<li key={r}>{r}</li>
+						<li key={r}>{t(r)}</li>
 					))}
 				</ul>
 			)}
@@ -1021,7 +1073,9 @@ function OptionCard({
 					<TriangleAlert size={14} />
 					<span>
 						<strong>
-							Trouble on the way · about +{o.disruption.minutes} min
+							{t(" Trouble on the way · about +")}
+							{o.disruption.minutes}
+							{t(" min ")}
 						</strong>
 						{o.disruption.titles.slice(0, 3).map((t) => (
 							<small key={t}>{t}</small>
@@ -1033,15 +1087,19 @@ function OptionCard({
 			{going && o.green && o.co2Saved >= 50 && (
 				<p className="impact-thanks">
 					<Leaf size={15} />
-					Nice choice — this trip keeps {kg(o.co2Saved)} of CO₂ out of Vilnius
-					air. Added to your savings.
+					{t("Nice choice — this trip keeps ")}
+					{t(kg(o.co2Saved))}
+					{t(" of CO₂ out of Vilnius air. Added to your savings.")}
 				</p>
 			)}
 			{going && !o.green && o.co2 > 0 && (
 				<p className="impact-nudge">
 					<Leaf size={15} />
-					This trip emits {kg(o.co2)} CO₂. Next time, try the bus — it’s part of
-					how Vilnius gets cleaner.
+					{t("This trip emits ")}
+					{t(kg(o.co2))}
+					{t(
+						" CO₂. Next time, try the bus — it’s part of how Vilnius gets cleaner.",
+					)}
 				</p>
 			)}
 			{o.quotes && going && (
@@ -1049,7 +1107,7 @@ function OptionCard({
 			)}
 			{!going && (
 				<button type="button" className="option-select" onClick={onGo}>
-					Go this way
+					{t("Go this way")}
 					<ArrowRight size={15} />
 				</button>
 			)}
@@ -1067,10 +1125,16 @@ function Providers({
 	mode: Mode;
 	trip: { from: Position; to: Place };
 }) {
+	const t = useT();
+
 	return (
 		<div className="providers">
 			<h4>
-				{mode === "taxi" ? "Compare taxi apps" : "Compare car-sharing services"}
+				{t(
+					mode === "taxi"
+						? "Compare taxi apps"
+						: "Compare car-sharing services",
+				)}
 			</h4>
 			<ol>
 				{quotes.map((q, i) => {
@@ -1079,27 +1143,33 @@ function Providers({
 						<li key={q.id} className={i === 0 ? "recommended" : ""}>
 							<div className="provider-main">
 								<span className="provider-name">
-									{i === 0 && <span className="provider-pick">Best pick</span>}
-									<strong>{q.name}</strong>
+									{i === 0 && (
+										<span className="provider-pick">{t("Best pick")}</span>
+									)}
+									<strong>{t(q.name)}</strong>
 									<small>
-										{mode === "taxi"
-											? `Pickup in ~${q.reach} min`
-											: `Nearest car ~${q.reach} min walk`}
-										{q.note ? ` · ${q.note}` : ""}
+										{t(
+											mode === "taxi"
+												? `Pickup in ~${q.reach} min`
+												: `Nearest car ~${q.reach} min walk`,
+										)}
+										{t(q.note ? ` · ${q.note}` : "")}
 									</small>
 								</span>
 								<span className="provider-price">
-									{q.price === null
-										? "Price in app"
-										: q.priceHigh
-											? `€${q.price.toFixed(2)}–${q.priceHigh.toFixed(2)}`
-											: `~€${q.price.toFixed(2)}`}
+									{t(
+										q.price === null
+											? "Price in app"
+											: q.priceHigh
+												? `€${q.price.toFixed(2)}–${q.priceHigh.toFixed(2)}`
+												: `~€${q.price.toFixed(2)}`,
+									)}
 								</span>
 							</div>
 							<div className="provider-badges">
 								{q.badges.map((b) => (
 									<span key={b} className={b.startsWith("Surge") ? "warn" : ""}>
-										{b}
+										{t(b)}
 									</span>
 								))}
 							</div>
@@ -1110,7 +1180,8 @@ function Providers({
 									target="_blank"
 									rel="noreferrer"
 								>
-									Open {q.name.split(" ")[0]}
+									{t("Open ")}
+									{t(q.name.split(" ")[0])}
 									<ExternalLink size={13} />
 								</a>
 							)}
@@ -1119,8 +1190,9 @@ function Providers({
 				})}
 			</ol>
 			<p className="helper-text">
-				Estimates from published tariffs; each app shows the exact price before
-				you book.
+				{t(
+					"Estimates from published tariffs; each app shows the exact price before you book.",
+				)}
 			</p>
 		</div>
 	);
@@ -1139,13 +1211,18 @@ function Itinerary({
 	legs: NamedRide[];
 	routes: Map<string, TransitRoute>;
 }) {
+	const t = useT();
+
 	return (
 		<ol className="itinerary">
 			<li className="step-walk">
 				<Footprints size={14} />
 				<span>
-					Walk {metres(legs[0].walkToMetres)} to{" "}
-					<strong>{legs[0].fromStop}</strong>
+					{t("Walk ")}
+					{t(metres(legs[0].walkToMetres))}
+					{t(" to")}
+					{t(" ")}
+					<strong>{t(legs[0].fromStop)}</strong>
 				</span>
 			</li>
 			{legs.map((leg, i) => {
@@ -1160,12 +1237,16 @@ function Itinerary({
 								<span>
 									{leg.walkToMetres > 15 ? (
 										<>
-											Change: walk {metres(leg.walkToMetres)} to{" "}
-											<strong>{leg.fromStop}</strong>
+											{t("Change: walk ")}
+											{t(metres(leg.walkToMetres))}
+											{t(" to")}
+											{t(" ")}
+											<strong>{t(leg.fromStop)}</strong>
 										</>
 									) : (
 										<>
-											Change at <strong>{leg.fromStop}</strong>
+											{t("Change at ")}
+											<strong>{t(leg.fromStop)}</strong>
 										</>
 									)}
 								</span>
@@ -1179,25 +1260,37 @@ function Itinerary({
 									color: "white",
 								}}
 							>
-								{name}
+								{t(name)}
 							</span>
 							<span>
 								<span>
 									<strong>
-										{route?.mode === "trolleybus" ? "Trolleybus" : "Bus"} {name}
-									</strong>{" "}
-									towards {leg.destination}
+										{t(route?.mode === "trolleybus" ? "Trolleybus" : "Bus")}
+										{t(" ")}
+										{t(name)}
+									</strong>
+									{t(" ")}
+									{t("towards ")}
+									{t(leg.destination)}
 								</span>
 								<small>
-									{leg.live && <Radio size={10} />} Board at{" "}
-									{time.format(leg.departAt)}
-									{leg.live
-										? Math.abs(delay) >= 60
-											? ` (live, ${Math.round(Math.abs(delay) / 60)} min ${delay > 0 ? "late" : "early"})`
-											: " (live)"
-										: ""}{" "}
-									· {leg.stops} stop{leg.stops === 1 ? "" : "s"} · get off at{" "}
-									<strong>{leg.toStop}</strong> at {time.format(leg.arriveAt)}
+									{leg.live && <Radio size={10} />}
+									{t(" Board at")}
+									{t(" ")}
+									{t(time.format(leg.departAt))}
+									{t(
+										leg.live
+											? Math.abs(delay) >= 60
+												? ` (live, ${Math.round(Math.abs(delay) / 60)} min ${delay > 0 ? "late" : "early"})`
+												: " (live)"
+											: "",
+									)}
+									{t(" ")}· {t(`Stops: ${leg.stops}`)}
+									{t(" · get off at")}
+									{t(" ")}
+									<strong>{t(leg.toStop)}</strong>
+									{t(" at ")}
+									{t(time.format(leg.arriveAt))}
 								</small>
 							</span>
 						</li>
@@ -1207,8 +1300,9 @@ function Itinerary({
 			<li className="step-walk">
 				<Footprints size={14} />
 				<span>
-					Walk {metres(legs[legs.length - 1].walkFromMetres)} to your
-					destination
+					{t("Walk ")}
+					{t(metres(legs[legs.length - 1].walkFromMetres))}
+					{t(" to your destination")}
 				</span>
 			</li>
 		</ol>
@@ -1230,6 +1324,7 @@ const until = new Intl.DateTimeFormat("en-GB", {
 
 /** Advice when something to avoid is at the destination or the start. */
 function TripAdvice({ impact }: { impact: TripImpact }) {
+	const t = useT();
 	const places = [
 		...impact.destination.map((d) => ({ d, where: "your destination" })),
 		...impact.start.map((d) => ({ d, where: "where you start" })),
@@ -1267,7 +1362,7 @@ function TripAdvice({ impact }: { impact: TripImpact }) {
 				</p>
 				{places.length > 1 && (
 					<small>
-						Also nearby:{" "}
+						{t(" Also nearby:")}{" "}
 						{places
 							.filter((p) => p.d !== worst)
 							.slice(0, 3)
@@ -1293,6 +1388,7 @@ function ReportTrouble({
 }: {
 	places: { label: string; at: Position }[];
 }) {
+	const t = useT();
 	const account = useAccount();
 	const [open, setOpen] = useState(false);
 	const [kind, setKind] = useState<AreaReportKind>("protest");
@@ -1309,18 +1405,19 @@ function ReportTrouble({
 				onClick={() => setOpen(!open)}
 			>
 				<Megaphone size={15} />
-				See a protest, crowd or blocked road? Warn others
+				{t(" See a protest, crowd or blocked road? Warn others ")}
 			</button>
 			{open &&
 				(account.status !== "signed-in" ? (
 					<p className="helper-text">
-						<a href="/dashboard?mode=signin">Sign in</a> to report — it keeps
-						reports trustworthy.
+						<a href="/dashboard?mode=signin">{t("Sign in")}</a>
+						{t(" to report — it keeps reports trustworthy. ")}
 					</p>
 				) : state === "sent" ? (
 					<p className="impact-thanks">
-						Thanks — riders planning trips nearby will be warned for the next 3
-						hours.
+						{t(
+							" Thanks — riders planning trips nearby will be warned for the next 3 hours. ",
+						)}
 					</p>
 				) : (
 					<div className="report-trouble-panel">
@@ -1336,7 +1433,7 @@ function ReportTrouble({
 								</button>
 							))}
 						</div>
-						<small>Where?</small>
+						<small>{t("Where?")}</small>
 						<div className="report-places">
 							{places.map((p) => (
 								<button
@@ -1363,7 +1460,7 @@ function ReportTrouble({
 						</div>
 						{state === "error" && (
 							<p className="helper-text">
-								Couldn’t send the report. Try again.
+								{t(" Couldn’t send the report. Try again. ")}
 							</p>
 						)}
 					</div>
@@ -1428,6 +1525,7 @@ function Suggestions({
 	search: PlaceSearch;
 	onChoose: (place: Place) => void;
 }) {
+	const t = useT();
 	return (
 		<>
 			{search.places.map((h) => (
@@ -1439,16 +1537,24 @@ function Suggestions({
 					<Navigation size={15} />
 					<span className="suggestion-text">
 						<span>{h.name}</span>
-						<small>{[h.detail, h.kind].filter(Boolean).join(" · ")}</small>
+						<small>
+							{[h.detail, t(placeKindLabel(h.kind))]
+								.filter(Boolean)
+								.join(" · ")}
+						</small>
 					</span>
 				</button>
 			))}
 			{search.searching && (
-				<p className="loading-text">Searching addresses and places…</p>
+				<p className="loading-text">
+					{t("Searching addresses and places…")}
+				</p>
 			)}
 			{search.error && (
 				<p className="helper-text">
-					Address search is unavailable right now — stops still work.
+					{t(
+						" Address search is unavailable right now — stops still work. ",
+					)}
 				</p>
 			)}
 			{search.stops.map((s) => (
@@ -1460,7 +1566,7 @@ function Suggestions({
 					<BusFront size={15} />
 					<span className="suggestion-text">
 						<span>{s.name}</span>
-						<small>Stop</small>
+						<small>{t("Stop")}</small>
 					</span>
 				</button>
 			))}
@@ -1475,9 +1581,10 @@ function RecentPlaces({
 	places: Place[];
 	onChoose: (place: Place) => void;
 }) {
+	const t = useT();
 	return (
 		<div className="recent-places">
-			<span>Your places</span>
+			<span>{t("Your places")}</span>
 			<div>
 				{places.map((p) => (
 					<button type="button" key={p.name} onClick={() => onChoose(p)}>
@@ -1509,6 +1616,7 @@ function TripConditions({
 	options: RankedOption[];
 	impact: TripImpact | null;
 }) {
+	const t = useT();
 	const legs = options.flatMap((o) => o.legs ?? []);
 	const crowd = legs.find((l) => l.crowding)?.crowding;
 	const learned = legs
@@ -1524,12 +1632,13 @@ function TripConditions({
 	);
 	const fromRiders = [...trouble.values()].filter((d) => d.source === "riders");
 	return (
-		<section className="trip-conditions" aria-label="Conditions now">
-			<h3>Conditions now · what your ranking is based on</h3>
+		<section className="trip-conditions" aria-label={t("Conditions now")}>
+			<h3>{t("Conditions now · what your ranking is based on")}</h3>
 			<dl>
 				<div>
 					<dt>
-						<CloudSun size={15} /> Weather
+						<CloudSun size={15} />
+						{t(" Weather ")}
 					</dt>
 					<dd>
 						{weather ? weatherText(weather) : "Unavailable"}
@@ -1542,7 +1651,8 @@ function TripConditions({
 				</div>
 				<div>
 					<dt>
-						<Users size={15} /> Crowding
+						<Users size={15} />
+						{t(" Crowding ")}
 					</dt>
 					<dd>
 						{crowd ? crowdLabel(crowd.value) : "—"}
@@ -1557,7 +1667,8 @@ function TripConditions({
 				</div>
 				<div>
 					<dt>
-						<Clock3 size={15} /> Delays
+						<Clock3 size={15} />
+						{t(" Delays ")}
 					</dt>
 					<dd>
 						{delay ? `~${delay.minutes} min expected` : "—"}
@@ -1570,7 +1681,8 @@ function TripConditions({
 				</div>
 				<div>
 					<dt>
-						<TriangleAlert size={15} /> Disruptions
+						<TriangleAlert size={15} />
+						{t(" Disruptions ")}
 					</dt>
 					<dd>
 						{trouble.size
@@ -1585,9 +1697,15 @@ function TripConditions({
 				</div>
 			</dl>
 			<p className="trip-conditions-weights">
-				Your weights: walking α {weights.alpha} · waiting β {weights.beta} ·
-				change γ {weights.gamma} min · crowding δ {weights.delta} · delay η{" "}
-				{weights.eta}
+				{t(" Your weights: walking α ")}
+				{weights.alpha}
+				{t(" · waiting β ")}
+				{weights.beta}
+				{t(" · change γ ")}
+				{weights.gamma}
+				{t(" min · crowding δ ")}
+				{weights.delta}
+				{t(" · delay η")} {weights.eta}
 			</p>
 		</section>
 	);

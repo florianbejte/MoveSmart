@@ -1,39 +1,43 @@
 "use client";
+
 import { UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LanguageSwitch, useT } from "@/lib/i18n/react";
 
 export default function Header() {
+	const t = useT();
+
 	const pathname = usePathname();
 	return (
 		<header className="app-header">
-			<Link href="/" className="app-brand" aria-label="MoveSmart home">
+			<Link href="/" className="app-brand" aria-label={t("MoveSmart home")}>
 				{/* Speech-bubble wordmark in the Go Vilnius style: boxed first word, red second word. */}
 				<span className="brand-bubble">MOVE</span>
 				<span className="brand-word">SMART</span>
 			</Link>
-			<nav aria-label="Main navigation">
+			<nav aria-label={t("Main navigation")}>
 				<Link
 					href="/"
 					className={pathname === "/" ? "current" : ""}
 					aria-current={pathname === "/" ? "page" : undefined}
 				>
-					Live map
+					{t("Live map")}
 				</Link>
 				<Link
 					href="/dashboard"
-					aria-label="Account"
+					aria-label={t("Account")}
 					className={pathname === "/dashboard" ? "current" : ""}
 					aria-current={pathname === "/dashboard" ? "page" : undefined}
 				>
 					<UserRound size={16} />
-					<span>Account</span>
+					<span>{t("Account")}</span>
 				</Link>
 			</nav>
 			<span className="header-city">
 				<Crenellation />
 				<span>Vilnius</span>
-				<span className="city-country">LT</span>
+				<LanguageSwitch />
 			</span>
 		</header>
 	);
@@ -41,6 +45,8 @@ export default function Header() {
 
 /** Gediminas Tower crenellation, the Vilnius brand's graphic element. */
 function Crenellation() {
+	const _t = useT();
+
 	return (
 		<svg
 			className="crenellation"

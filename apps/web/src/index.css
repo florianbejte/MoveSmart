@@ -344,3 +344,7 @@ select {
 .profile-formula b {
 	color: var(--red);
 }
+.language-switch { display: inline-flex; align-items: center; }
+.language-switch select { min-height: 44px; padding: 8px 6px; border: 1px solid #e4e4e9; border-radius: 10px; background: white; color: #414454; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.language-switch select:focus-visible { outline: 2px solid #f51e29; outline-offset: 2px; }
+@media(max-width: 899px) { .header-city { gap: 6px; } .header-city > span:not(.language-switch) { display: none; } .language-switch { display: inline-flex; } }

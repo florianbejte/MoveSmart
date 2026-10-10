@@ -2,6 +2,7 @@
 
 import { ChevronDown, Sigma } from "lucide-react";
 import { useState } from "react";
+import { useT } from "@/lib/i18n/react";
 import {
 	FEEL_TERMS,
 	type RankedOption,
@@ -31,36 +32,41 @@ export function FormulaDetails({
 	weights: Weights;
 	runnerUp?: RankedOption;
 }) {
+	const uiText = useT();
 	const [open, setOpen] = useState(false);
 	return (
 		<div className="formula-details">
 			<button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
 				<Sigma size={14} />
-				How we ranked this
+				{uiText(" How we ranked this ")}
 				<ChevronDown size={14} className={open ? "flip" : ""} />
 			</button>
 			{open && (
 				<div className="formula-panel">
 					<p className="formula-note">
-						We compare every option with your personal formula: the time on
-						board plus walking, waiting, changes, crowding and delays, each
-						weighted by your answers:
+						{uiText(
+							" We compare every option with your personal formula: the time on board plus walking, waiting, changes, crowding and delays, each weighted by your answers: ",
+						)}
 					</p>
 					<p className="formula-equation">
-						C<sub>u</sub>(r) = T<sub>ride</sub> + <b>{weights.alpha}</b>·
-						<b>{weights.m}</b>·T<sub>walk</sub> + <b>{weights.beta}</b>·T
-						<sub>wait</sub> + <b>{weights.gamma}</b>·N<sub>transfers</sub> +{" "}
-						<b>{weights.delta}</b>·Q<sub>crowding</sub> + <b>{weights.eta}</b>·D
-						<sub>delay</sub>
+						C<sub>u</sub>(r) = T<sub>{uiText("ride")}</sub> +{" "}
+						<b>{weights.alpha}</b>·<b>{weights.m}</b>·T
+						<sub>{uiText("walk")}</sub> + <b>{weights.beta}</b>·T
+						<sub>{uiText("wait")}</sub> + <b>{weights.gamma}</b>·N
+						<sub>{uiText("transfers")}</sub> + <b>{weights.delta}</b>·Q
+						<sub>{uiText("crowding")}</sub> + <b>{weights.eta}</b>·D
+						<sub>{uiText("delay")}</sub>
 					</p>
 					<p className="formula-note">
-						Bold numbers are <strong>your</strong> weights from the
-						questionnaire
+						{uiText(" Bold numbers are ")}
+						<strong>{uiText("your")}</strong>
+						{uiText(" weights from the questionnaire ")}
 						{weights.weather.length
 							? ` and today’s weather (${weights.weather.join(", ")})`
 							: ""}
-						. MoveSmart adds price and the city’s CO₂, so greener trips win
-						ties.
+						{uiText(
+							" . MoveSmart adds price and the city’s CO₂, so greener trips win ties. ",
+						)}
 					</p>
 					<table>
 						<tbody>
@@ -73,14 +79,17 @@ export function FormulaDetails({
 						<tfoot>
 							<tr>
 								<td />
-								<td>Time, weighted for you</td>
-								<td>{option.feels} min</td>
+								<td>{uiText("Time, weighted for you")}</td>
+								<td>
+									{option.feels}
+									{uiText(" min")}
+								</td>
 							</tr>
 						</tfoot>
 					</table>
 					<p className="formula-note">
-						<strong>Also counted</strong> — so cheaper and greener trips rank
-						higher:
+						<strong>{uiText("Also counted")}</strong>
+						{uiText(" — so cheaper and greener trips rank higher: ")}
 					</p>
 					<table>
 						<tbody>
@@ -93,7 +102,7 @@ export function FormulaDetails({
 						<tfoot>
 							<tr>
 								<td />
-								<td>Ranking score (lower is better)</td>
+								<td>{uiText("Ranking score (lower is better)")}</td>
 								<td>{option.score}</td>
 							</tr>
 						</tfoot>
@@ -116,14 +125,15 @@ export function FormulaDetails({
 }
 
 function TermRow({ term: t }: { term: Term }) {
+	const uiText = useT();
 	return (
 		<tr className={t.minutes < 0.05 ? "zero" : ""}>
 			<td>
 				<i style={{ background: COLORS[t.id] }} />
 			</td>
 			<td>
-				<strong>{t.label}</strong>
-				<small>{t.detail}</small>
+				<strong>{uiText(t.label)}</strong>
+				<small>{uiText(t.detail)}</small>
 			</td>
 			<td>{t.minutes}</td>
 		</tr>
