@@ -55,6 +55,7 @@ export default function TransitMap(props: Props) {
 	);
 	const communityPreview = useRef<maplibregl.Popup | null>(null);
 	const communityPreviewId = useRef<string | null>(null);
+	const tripStopPreview = useRef<maplibregl.Popup | null>(null);
 	const userMarker = useRef<maplibregl.Marker | null>(null);
 	const handlers = useRef(props);
 	const cityPopup = useRef<{
@@ -236,7 +237,7 @@ export default function TransitMap(props: Props) {
 				if (
 					(target instanceof Element && target.closest(".vehicle-pin")) ||
 					instance.queryRenderedFeatures(e.point, {
-						layers: ["selected-stop", "stops-points"],
+						layers: ["selected-stop", "stops-points", "trip-stops-points"],
 					}).length
 				) {
 					if (pinned) cityPopup.current?.popup.remove();
@@ -423,6 +424,50 @@ export default function TransitMap(props: Props) {
 			instance.on("mouseleave", "stops-points", () => {
 				instance.getCanvas().style.cursor = "";
 			});
+			instance.addSource("trip-stops", { type: "geojson", data: EMPTY_PLAN });
+			instance.addLayer({
+				id: "trip-stops-points",
+				type: "circle",
+				source: "trip-stops",
+				paint: {
+					"circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 4, 16, 7],
+					"circle-color": "#ffffff",
+					"circle-stroke-color": ["get", "color"],
+					"circle-stroke-width": 3,
+				},
+			});
+			instance.on("click", "trip-stops-points", (e) => {
+				const id = e.features?.[0]?.properties?.id;
+				tripStopPreview.current?.remove();
+				if (id) handlers.current.onStop(String(id));
+			});
+			instance.on("mouseenter", "trip-stops-points", (e) => {
+				const f = e.features?.[0];
+				if (f?.geometry.type !== "Point") return;
+				vehiclePopup.current?.popup.remove();
+				communityPreview.current?.remove();
+				if (!cityPopup.current?.pinned) cityPopup.current?.popup.remove();
+				tripStopPreview.current?.remove();
+				const content = document.createElement("div");
+				content.setAttribute("role", "tooltip");
+				content.textContent = `${f.properties.sequence}. ${f.properties.name} · Click for departures`;
+				tripStopPreview.current = new maplibregl.Popup({
+					closeButton: false,
+					closeOnClick: false,
+					focusAfterOpen: false,
+					offset: 12,
+					className: "city-map-popup is-preview",
+				})
+					.setLngLat([f.geometry.coordinates[0], f.geometry.coordinates[1]])
+					.setDOMContent(content)
+					.addTo(instance);
+				instance.getCanvas().style.cursor = "pointer";
+			});
+			instance.on("mouseleave", "trip-stops-points", () => {
+				tripStopPreview.current?.remove();
+				instance.getCanvas().style.cursor = "";
+			});
+			instance.on("movestart", () => tripStopPreview.current?.remove());
 			instance.addSource("community", {
 				type: "geojson",
 				data: { type: "FeatureCollection", features: [] },
@@ -514,6 +559,7 @@ export default function TransitMap(props: Props) {
 			cityPopup.current?.popup.remove();
 			vehiclePopup.current?.popup.remove();
 			communityPreview.current?.remove();
+			tripStopPreview.current?.remove();
 			observer.disconnect();
 			instance.remove();
 			map.current = null;
@@ -594,6 +640,28 @@ export default function TransitMap(props: Props) {
 	}, [ready, props.selectedStop]);
 	useEffect(() => {
 		if (!ready || !map.current) return;
+		tripStopPreview.current?.remove();
+		(map.current.getSource("trip-stops") as maplibregl.GeoJSONSource)?.setData({
+			type: "FeatureCollection",
+			features: (props.trip?.stops ?? []).map((stop, index) => ({
+				type: "Feature",
+				properties: {
+					id: stop.id,
+					name: stop.name,
+					sequence: index + 1,
+					color: props.tripColor || "#414454",
+				},
+				geometry: { type: "Point", coordinates: [stop.lon, stop.lat] },
+			})),
+		});
+		map.current.setFilter("stops-points", [
+			"!",
+			[
+				"in",
+				["get", "id"],
+				["literal", (props.trip?.stops ?? []).map((s) => s.id)],
+			],
+		]);
 		const source = map.current.getSource("route") as maplibregl.GeoJSONSource;
 		source?.setData({
 			type: "FeatureCollection",

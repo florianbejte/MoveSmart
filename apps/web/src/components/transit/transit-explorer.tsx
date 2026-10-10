@@ -1171,9 +1171,13 @@ export default function TransitExplorer() {
 					stale={feedStale}
 					now={now}
 					vehicles={
-						selectedVehicle &&
-						!filteredVehicles.some((v) => v.id === selectedVehicle.id)
-							? [...filteredVehicles, selectedVehicle]
+						selectedVehicle
+							? vehicles.filter((v) =>
+									selectedVehicle.routeId
+										? v.routeId === selectedVehicle.routeId
+										: v.route === selectedVehicle.route &&
+											v.mode === selectedVehicle.mode,
+								)
 							: filteredVehicles
 					}
 					stops={filteredStops}
