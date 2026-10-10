@@ -8,6 +8,7 @@ import {
 	eventStillRelevant,
 	matchesRoutes,
 } from "@/lib/transit/city";
+import { MapSymbol } from "./map-symbol";
 import { useTransit } from "./use-transit";
 
 export function useCityLayers(now: number) {
@@ -21,7 +22,9 @@ export function useCityLayers(now: number) {
 	const parking = useTransit<CityFeed>(url("parking"), 300000);
 	const signals = useTransit<CityFeed>(url("signals"), 300000);
 	const corridors = useTransit<CityFeed>(url("corridors"), 300000);
+	const shelters = useTransit<CityFeed>(url("shelters"), 300000);
 	const feeds = {
+		shelters,
 		incidents,
 		roadworks,
 		restrictions,
@@ -41,6 +44,7 @@ export function useCityLayers(now: number) {
 				parking.data,
 				signals.data,
 				corridors.data,
+				shelters.data,
 			]
 				.flatMap((feed) => feed?.collection.features ?? [])
 				.filter(
@@ -57,6 +61,7 @@ export function useCityLayers(now: number) {
 			parking.data,
 			signals.data,
 			corridors.data,
+			shelters.data,
 			enabled,
 			now,
 		],
@@ -99,7 +104,7 @@ export function CityLayers({
 			!!feed.error ||
 			feed.data?.stale ||
 			(feed.data &&
-				!["parking", "signals", "corridors"].includes(id) &&
+				!["parking", "signals", "corridors", "shelters"].includes(id) &&
 				now - feed.data.fetchedAt > 120000)
 		);
 	});
@@ -115,7 +120,11 @@ export function CityLayers({
 		incidentFeed.data?.stale ||
 		(incidentFeed.data && now - incidentFeed.data.fetchedAt > 120000);
 	return (
-		<section className="city-layers" aria-label="City data layers">
+		<section
+			className="city-layers"
+			data-open={open}
+			aria-label="City data layers"
+		>
 			<button
 				className="city-layers-heading"
 				type="button"
@@ -138,8 +147,9 @@ export function CityLayers({
 			{open && (
 				<div className="city-layer-options">
 					<p className="helper-text">
-						Explore the city’s published transport data. Hover for a preview;
-						click a shape or marker to keep its details on the map.
+						Explore published transport and shelter data. Hover for a preview;
+						click a shape or marker to keep its details on the map. Zoom in to
+						reveal more icons.
 					</p>
 					{CITY_LAYERS.map((layer) => {
 						const feed = city.feeds[layer.id];
@@ -148,7 +158,9 @@ export function CityLayers({
 							!!feed.error ||
 							feed.data?.stale ||
 							(feed.data &&
-								!["parking", "signals", "corridors"].includes(layer.id) &&
+								!["parking", "signals", "corridors", "shelters"].includes(
+									layer.id,
+								) &&
 								now - feed.data.fetchedAt > 120000);
 						const count = feed.data?.collection.features.filter((f) =>
 							eventStillRelevant(f.properties, now),
@@ -162,10 +174,7 @@ export function CityLayers({
 										checked={checked}
 										onChange={() => city.toggle(layer.id)}
 									/>
-									<span
-										className="layer-swatch"
-										style={{ background: layer.color }}
-									/>
+									<MapSymbol kind={layer.id} color={layer.color} />
 									<strong>{layer.label}</strong>
 									<span>{checked && count !== undefined ? count : ""}</span>
 								</label>
@@ -207,9 +216,21 @@ export function CityLayers({
 					>
 						City data: JUDU / Vilnius ↗
 					</a>
+					<a
+						className="city-source"
+						href="https://open.geodata.gov.lt/datasets/8a1e4b06ca714e2983b67c737c667abe_0/"
+						target="_blank"
+						rel="noreferrer"
+					>
+						Shelters: PAGD / Valstybės duomenų agentūra · CC BY 4.0 ↗
+					</a>
 				</div>
 			)}
-			<section className="route-alerts" aria-label="Transit disruption notices">
+			<section
+				className="route-alerts"
+				data-empty={!alerts.length && !incidentDelayed && !!incidentFeed.data}
+				aria-label="Transit disruption notices"
+			>
 				{incidentDelayed ? (
 					<p role="status">Transit alerts may be incomplete or outdated.</p>
 				) : !incidentFeed.data ? (

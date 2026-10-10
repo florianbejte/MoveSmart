@@ -13,6 +13,13 @@ const event = (id: number): Source => ({
 	fields: EVENTS,
 });
 const SOURCES: Record<CityLayerId, Source[]> = {
+	shelters: [
+		{
+			url: "https://services-eu1.arcgis.com/rHAjZpbf6qHK8UCL/arcgis/rest/services/Priedangų_tinklas_Lietuvoje_(TEST)/FeatureServer/0",
+			fields:
+				"object_id,pavadinimas,gatve,namo_numeris,gyvenviete,savivaldybe,gyventoju_skaicius,plotas,pritaikyta_asmenims_su_negalia,patekimas_visa_para,darbo_valandos,pastabos,atnaujinimo_data",
+		},
+	],
 	incidents: [event(22), event(23)],
 	roadworks: [event(6), event(7)],
 	restrictions: [event(9), event(10)],
@@ -71,11 +78,11 @@ async function fetchSource(source: Source, ttl: number): Promise<Cached> {
 		)
 			throw new Error("Invalid city feature IDs");
 		const features: Feature[] = [];
-		// ID batches avoid silent ArcGIS transfer-limit truncation, including road load > 1,000 records.
-		for (let index = 0; index < ids.objectIds.length; index += 300) {
+		// Bounded ID batches avoid transfer limits and long URLs rejected by ArcGIS hosting.
+		for (let index = 0; index < ids.objectIds.length; index += 200) {
 			const data = await query(source.url, {
 				f: "geojson",
-				objectIds: ids.objectIds.slice(index, index + 300).join(","),
+				objectIds: ids.objectIds.slice(index, index + 200).join(","),
 				outFields: source.fields,
 				outSR: "4326",
 				returnGeometry: "true",
@@ -104,7 +111,7 @@ async function fetchSource(source: Source, ttl: number): Promise<Cached> {
 }
 export async function getCityLayer(category: CityLayerId): Promise<CityFeed> {
 	const sources = SOURCES[category];
-	const ttl = ["parking", "signals", "corridors"].includes(category)
+	const ttl = ["parking", "signals", "corridors", "shelters"].includes(category)
 		? 6 * 60 * 60 * 1000
 		: 60000;
 	const results = await Promise.allSettled(

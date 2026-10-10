@@ -125,3 +125,31 @@ test("parking uses published zone colors", () => {
 	assert.equal(result?.properties.title, "Blue zone");
 	assert.equal(result?.properties.color, "#3479be");
 });
+
+test("shelters preserve published capacity and distinguish unknown access from no", () => {
+	const shelter = normaliseCityFeature(
+		feature({
+			pavadinimas: "<b>School</b>",
+			gyventoju_skaicius: 150,
+			patekimas_visa_para: 0,
+			pritaikyta_asmenims_su_negalia: null,
+			gatve: "Vilniaus g.",
+			namo_numeris: "10",
+			atnaujinimo_data: Date.UTC(2026, 9, 1),
+		}),
+		"shelters",
+		source,
+		now,
+	);
+	assert.ok(shelter);
+	assert.equal(shelter.properties.title, "School");
+	assert.match(
+		shelter.properties.description,
+		/Published capacity: 150 people/,
+	);
+	assert.match(shelter.properties.description, /24-hour entry: No/);
+	assert.match(shelter.properties.description, /disabilities: Not reported/);
+	assert.match(shelter.properties.description, /2026-10-01/);
+	assert.equal(shelter.properties.end, null);
+	assert.match(shelter.properties.timing, /occupancy unknown/);
+});

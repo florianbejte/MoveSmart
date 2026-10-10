@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import "@fontsource-variable/geist";
-import "@fontsource-variable/geist-mono";
+import "@fontsource-variable/manrope";
 
 import "../index.css";
 
@@ -19,7 +18,7 @@ export default async function RootLayout({
 	return (
 		<html lang="en" suppressHydrationWarning>
 			<body className="antialiased">
-				<div className="grid h-svh grid-rows-[auto_1fr]">
+				<div className="app-shell">
 					<Header />
 					{children}
 				</div>

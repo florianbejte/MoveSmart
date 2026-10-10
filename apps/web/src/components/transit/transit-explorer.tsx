@@ -4,19 +4,25 @@ import {
 	ArrowLeft,
 	ArrowUpRight,
 	BusFront,
+	ChevronDown,
 	ChevronRight,
+	ChevronUp,
 	Clock3,
+	Layers2,
 	LocateFixed,
+	Map as MapIcon,
 	MapPin,
 	Navigation,
 	Radio,
 	RefreshCw,
 	Search,
+	SlidersHorizontal,
 	X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { distance, freshVehicle } from "@/lib/transit/core";
+import { SERVICE_COLORS, serviceColor } from "@/lib/transit/service-colors";
 import type {
 	LiveFeed,
 	Network,
@@ -28,6 +34,7 @@ import type {
 	Vehicle,
 } from "@/lib/transit/types";
 import { CityLayers, useCityLayers } from "./city-layers";
+import { MapSymbol } from "./map-symbol";
 import { useTransit } from "./use-transit";
 import "./transit.css";
 
@@ -64,7 +71,15 @@ function RouteBadge({
 }) {
 	return (
 		<span
-			className={`route-badge ${route?.mode === "trolleybus" ? "trolleybus" : "bus"}`}
+			className="route-badge"
+			style={{
+				background: serviceColor(
+					route?.name ?? label ?? "",
+					route?.mode,
+					route?.color,
+				),
+				color: "white",
+			}}
 		>
 			{route?.name ?? label ?? "—"}
 		</span>
@@ -98,6 +113,22 @@ export default function TransitExplorer() {
 	const [now, setNow] = useState(Date.now());
 	const city = useCityLayers(now);
 	const [cityOpen, setCityOpen] = useState(false);
+	const [sheet, setSheet] = useState<"peek" | "half" | "full">("half");
+	const [filtersOpen, setFiltersOpen] = useState(false);
+	const sheetPointer = useRef<number | null>(null);
+	const sheetSwiped = useRef(false);
+	function openNearby() {
+		setSelection(null);
+		setPreviewTrip(null);
+		setCityOpen(false);
+		setSheet("half");
+	}
+	function openLayers() {
+		setCityOpen(true);
+		setSheet("half");
+		panelContent.current?.scrollTo({ top: 0 });
+	}
+
 	useEffect(() => {
 		const timer = setInterval(() => setNow(Date.now()), 10_000);
 		return () => clearInterval(timer);
@@ -185,6 +216,8 @@ export default function TransitExplorer() {
 		setFocus({ ...position, key: Date.now() });
 	}
 	function selectStop(id: string) {
+		setSheet("half");
+		setFiltersOpen(false);
 		setCityOpen(false);
 		setQuery("");
 		setSelection({ type: "stop", id });
@@ -193,6 +226,8 @@ export default function TransitExplorer() {
 		if (stop) focusOn(stop);
 	}
 	function selectVehicle(id: string) {
+		setSheet("half");
+		setFiltersOpen(false);
 		setCityOpen(false);
 		setQuery("");
 		setSelection({ type: "vehicle", id });
@@ -201,6 +236,9 @@ export default function TransitExplorer() {
 		if (vehicle) focusOn(vehicle);
 	}
 	function locate() {
+		setSheet("half");
+		setCityOpen(false);
+		panelContent.current?.scrollTo({ top: 0 });
 		if (!navigator.geolocation) {
 			setLocationError(
 				"Location is not supported in this browser. You can search for a stop or move the map instead.",
@@ -244,23 +282,91 @@ export default function TransitExplorer() {
 		setNearbyOnly(false);
 	};
 	return (
-		<main className="transit-app">
+		<main
+			className="transit-app"
+			data-sheet={sheet}
+			data-view={cityOpen ? "layers" : "nearby"}
+			data-detail={!!selection && !cityOpen}
+		>
 			<aside className="explorer-panel" aria-label="Transit explorer">
+				<button
+					type="button"
+					className="sheet-handle"
+					aria-label={
+						sheet === "full" ? "Show more map" : "Expand transit panel"
+					}
+					aria-expanded={sheet === "full"}
+					onClick={() => {
+						if (sheetSwiped.current) {
+							sheetSwiped.current = false;
+							return;
+						}
+						setSheet(sheet === "full" ? "half" : "full");
+					}}
+					onPointerDown={(e) => {
+						sheetPointer.current = e.clientY;
+						sheetSwiped.current = false;
+						e.currentTarget.setPointerCapture(e.pointerId);
+					}}
+					onPointerUp={(e) => {
+						if (sheetPointer.current !== null) {
+							const delta = e.clientY - sheetPointer.current;
+							if (Math.abs(delta) > 25) {
+								sheetSwiped.current = true;
+								setSheet(
+									delta < 0 ? "full" : sheet === "full" ? "half" : "peek",
+								);
+							}
+							sheetPointer.current = null;
+						}
+					}}
+					onPointerCancel={() => {
+						sheetPointer.current = null;
+					}}
+				>
+					<span />
+				</button>
 				<div className="explorer-heading">
-					<span className="eyebrow">YOUR CITY, IN MOTION</span>
-					<h1>Where to next?</h1>
-					<p>Find your stop. Catch your ride.</p>
+					<div>
+						<h1>{cityOpen ? "A closer look." : "Find your ride."}</h1>
+						<p>
+							{cityOpen
+								? "The city, layer by layer."
+								: "Vilnius is moving. Come along."}
+						</p>
+					</div>
+					<button
+						type="button"
+						className="sheet-size-button"
+						aria-label={
+							sheet === "full" ? "Show more map" : "Expand transit panel"
+						}
+						onClick={() => setSheet(sheet === "full" ? "half" : "full")}
+					>
+						{sheet === "full" ? (
+							<ChevronDown size={20} />
+						) : (
+							<ChevronUp size={20} />
+						)}
+					</button>
+					<span className="heading-route-symbol" aria-hidden="true">
+						<BusFront size={25} />
+					</span>
 				</div>
 				<label className="transit-search">
 					<Search size={19} />
 					<input
 						value={query}
+						onFocus={() => {
+							setCityOpen(false);
+							setSheet("full");
+						}}
 						onChange={(e) => {
 							setQuery(e.target.value);
 							setSelection(null);
 							setPreviewTrip(null);
 						}}
-						placeholder="Search a stop, route or destination"
+						placeholder="Stop, route or destination"
 						aria-label="Search stops, routes or destinations"
 					/>
 					{query && (
@@ -272,108 +378,142 @@ export default function TransitExplorer() {
 							<X size={16} />
 						</button>
 					)}
-				</label>
-				<fieldset className="mode-tabs" aria-label="Transport type">
-					{(
-						[
-							["all", "All transport"],
-							["bus", "Buses"],
-							["trolleybus", "Trolleybuses"],
-						] as const
-					).map(([value, label]) => (
-						<button
-							type="button"
-							key={value}
-							className={mode === value ? "active" : ""}
-							aria-pressed={mode === value}
-							onClick={() => {
-								setMode(value);
-								setRouteId("");
-							}}
-						>
-							{label}
-						</button>
-					))}
-				</fieldset>
-				<div className="filter-row">
-					<label className="route-select">
-						<span className="sr-only">Filter by route</span>
-						<select
-							value={routeId}
-							onChange={(e) => setRouteId(e.target.value)}
-						>
-							<option value="">Every route</option>
-							{routes
-								.filter((r) => mode === "all" || r.mode === mode)
-								.map((r) => (
-									<option key={r.id} value={r.id}>
-										{r.name} · {r.mode === "trolleybus" ? "Trolleybus" : "Bus"}
-									</option>
-								))}
-						</select>
-					</label>
 					<button
 						type="button"
-						className={`nearby-toggle ${nearbyOnly ? "active" : ""}`}
-						aria-pressed={nearbyOnly}
-						onClick={() => setNearbyOnly((v) => !v)}
-					>
-						<Navigation size={14} />
-						Within 2 km
-					</button>
-				</div>
-				<button
-					type="button"
-					className="locate-button"
-					onClick={locate}
-					disabled={locating}
-				>
-					<LocateFixed size={18} className={locating ? "spin" : ""} />
-					<span>
-						{locating
-							? "Finding your location…"
-							: location
-								? "Update my location"
-								: "Use my location"}
-					</span>
-					<ArrowUpRight size={17} />
-				</button>
-				{locationError && (
-					<div className="notice" role="status">
-						{locationError}
-					</div>
-				)}
-				{location && (
-					<button
-						type="button"
-						className="text-button"
+						className={`filter-button ${filtersOpen || routeId || mode !== "all" || nearbyOnly ? "active" : ""}`}
+						aria-label="Route filters"
+						aria-expanded={filtersOpen}
 						onClick={() => {
-							setLocation(null);
-							setNearbyOnly(false);
-							setLocationError(null);
+							setFiltersOpen(!filtersOpen);
+							setCityOpen(false);
+							if (sheet === "peek") setSheet("half");
 						}}
 					>
-						Use map center instead
+						<SlidersHorizontal size={19} />
 					</button>
-				)}
-				{(network.error || live.error || network.data?.stale) && (
-					<div className="notice warning" role="status">
-						{network.error ||
-							live.error ||
-							"Using a saved timetable while the source reconnects."}
+				</label>
+				<nav className="panel-tabs" aria-label="Explore views">
+					<button type="button" aria-pressed={!cityOpen} onClick={openNearby}>
+						<MapPin size={16} />
+						Nearby
+					</button>
+					<button type="button" aria-pressed={cityOpen} onClick={openLayers}>
+						<Layers2 size={16} />
+						City layers
+						<span className="layer-count">{city.enabled.length}</span>
+					</button>
+				</nav>
+				<div className="panel-content" ref={panelContent}>
+					<div className="explorer-filters" hidden={!filtersOpen || cityOpen}>
+						<fieldset className="mode-tabs" aria-label="Transport type">
+							{(
+								[
+									["all", "All transport"],
+									["bus", "Buses"],
+									["trolleybus", "Trolleybuses"],
+								] as const
+							).map(([value, label]) => (
+								<button
+									type="button"
+									key={value}
+									className={mode === value ? "active" : ""}
+									aria-pressed={mode === value}
+									onClick={() => {
+										setMode(value);
+										setRouteId("");
+									}}
+								>
+									{label}
+								</button>
+							))}
+						</fieldset>
+						<div className="filter-row">
+							<label className="route-select">
+								<span className="sr-only">Filter by route</span>
+								<select
+									value={routeId}
+									onChange={(e) => setRouteId(e.target.value)}
+								>
+									<option value="">Every route</option>
+									{routes
+										.filter((r) => mode === "all" || r.mode === mode)
+										.map((r) => (
+											<option key={r.id} value={r.id}>
+												{r.name} ·{" "}
+												{r.mode === "trolleybus" ? "Trolleybus" : "Bus"}
+											</option>
+										))}
+								</select>
+							</label>
+							<button
+								type="button"
+								className={`nearby-toggle ${nearbyOnly ? "active" : ""}`}
+								aria-pressed={nearbyOnly}
+								onClick={() => setNearbyOnly((v) => !v)}
+							>
+								<Navigation size={14} />
+								Within 2 km
+							</button>
+						</div>
 						<button
 							type="button"
-							onClick={() => {
-								network.retry();
-								live.retry();
-							}}
+							className="locate-button"
+							onClick={locate}
+							disabled={locating}
 						>
-							<RefreshCw size={14} />
-							Retry
+							<LocateFixed size={18} className={locating ? "spin" : ""} />
+							<span>
+								{locating
+									? "Finding your location…"
+									: location
+										? "Update my location"
+										: "Use my location"}
+							</span>
+							<ArrowUpRight size={17} />
 						</button>
 					</div>
-				)}
-				<div className="panel-content" ref={panelContent}>
+					{locationError && (
+						<div className="notice location-notice" role="status">
+							<span>{locationError}</span>
+							<button
+								type="button"
+								aria-label="Dismiss location message"
+								onClick={() => setLocationError(null)}
+							>
+								<X size={16} />
+							</button>
+						</div>
+					)}
+					{location && (
+						<button
+							type="button"
+							className="text-button"
+							onClick={() => {
+								setLocation(null);
+								setNearbyOnly(false);
+								setLocationError(null);
+							}}
+						>
+							Use map center instead
+						</button>
+					)}
+					{(network.error || live.error || network.data?.stale) && (
+						<div className="notice warning" role="status">
+							{network.error ||
+								live.error ||
+								"Using a saved timetable while the source reconnects."}
+							<button
+								type="button"
+								onClick={() => {
+									network.retry();
+									live.retry();
+								}}
+							>
+								<RefreshCw size={14} />
+								Retry
+							</button>
+						</div>
+					)}
 					<CityLayers
 						city={city}
 						now={now}
@@ -391,339 +531,349 @@ export default function TransitExplorer() {
 										: []
 						}
 					/>
-					{selection && (
-						<button
-							className="back-button"
-							type="button"
-							onClick={() => {
-								setSelection(null);
-								setPreviewTrip(null);
-							}}
-						>
-							<ArrowLeft size={15} />
-							Back to nearby
-						</button>
-					)}
-					{selection?.type === "stop" ? (
-						<>
-							<div className="detail-heading">
-								<span className="detail-icon">
-									<MapPin size={23} />
-								</span>
-								<div>
-									<span className="eyebrow">
-										STOP · {selectedStop?.id ?? selection.id}
-									</span>
-									<h2>{selectedStop?.name ?? "Loading stop…"}</h2>
-									<p>
-										{selectedStop?.description ||
-											"Departures from this platform"}
-									</p>
-								</div>
-							</div>
-							<div className="stop-route-list">
-								{selectedStop?.routeIds.map((id) => (
-									<RouteBadge key={id} route={routeById.get(id)} />
-								))}
-							</div>
-							<div className="section-heading">
-								<h3>Upcoming departures</h3>
-								<span>Vilnius time</span>
-							</div>
-							<p className="helper-text">
-								Live estimates use reported schedule deviation. Scheduled times
-								appear when live data is unavailable.
-							</p>
-							{board.error && (
-								<div className="notice warning" role="status">
-									Couldn’t refresh departures. Any previous estimates may be
-									outdated.
-									<button type="button" onClick={board.retry}>
-										Try again
-									</button>
-								</div>
-							)}
-							{!board.data && !board.error && (
-								<p className="loading-text">Loading departures…</p>
-							)}
-							{board.data?.stale && (
-								<p className="notice">
-									Some sources are unavailable; times may be scheduled or based
-									on a saved timetable.
-								</p>
-							)}
-							{board.data?.departures
-								.filter((d) => d.estimatedAt >= now)
-								.slice(0, 20)
-								.map((d) => {
-									const isLive =
-										d.live &&
-										!board.error &&
-										now - (board.data?.generatedAt ?? 0) < 120_000;
-									return (
-										<button
-											type="button"
-											className="departure-row"
-											key={`${d.tripId}-${d.scheduledAt}`}
-											onClick={() => {
-												if (
-													d.vehicleId &&
-													vehicles.some((v) => v.id === d.vehicleId)
-												)
-													selectVehicle(d.vehicleId);
-												else setPreviewTrip(d.tripId);
-											}}
-										>
-											<RouteBadge route={routeById.get(d.routeId)} />
-											<span className="row-main">
-												<strong>{d.destination}</strong>
-												<small>
-													{isLive
-														? "Live estimate"
-														: d.live
-															? "Last estimate · outdated"
-															: "Scheduled"}{" "}
-													· {timeFormat.format(d.scheduledAt)}
-												</small>
-											</span>
-											<span
-												className={`departure-time ${isLive ? "live" : ""}`}
-											>
-												<strong>
-													{Math.max(
-														1,
-														Math.ceil((d.estimatedAt - now) / 60_000),
-													)}
-													<small> min</small>
-												</strong>
-												{isLive && <Radio size={12} />}
-											</span>
-										</button>
-									);
-								})}
-							{board.data &&
-								!board.data.departures.some((d) => d.estimatedAt >= now) && (
-									<div className="empty-state">
-										<Clock3 size={25} />
-										<h3>No upcoming departures</h3>
-										<p>
-											No boarding services are scheduled here in the next 24
-											hours.
-										</p>
-									</div>
-								)}
-							{previewTrip && (
-								<p className="helper-text">
-									Selected departure’s route is highlighted on the map.
-								</p>
-							)}
-						</>
-					) : selection?.type === "vehicle" ? (
-						selectedVehicle ? (
+					<div
+						className="transit-results"
+						hidden={cityOpen}
+						key={selection?.id ?? "nearby"}
+					>
+						{selection && (
+							<button
+								className="back-button"
+								type="button"
+								onClick={() => {
+									setSelection(null);
+									setPreviewTrip(null);
+								}}
+							>
+								<ArrowLeft size={15} />
+								Back to nearby
+							</button>
+						)}
+						{selection?.type === "stop" ? (
 							<>
 								<div className="detail-heading">
-									<RouteBadge
-										route={
-											selectedVehicle.routeId
-												? routeById.get(selectedVehicle.routeId)
-												: undefined
-										}
-										label={selectedVehicle.route}
-									/>
+									<span className="detail-icon">
+										<MapPin size={23} />
+									</span>
 									<div>
 										<span className="eyebrow">
-											{selectedVehicle.mode === "bus" ? "BUS" : "TROLLEYBUS"} ·{" "}
-											{selectedVehicle.number}
+											Stop {selectedStop?.id ?? selection.id}
 										</span>
-										<h2>
-											{selectedVehicle.destination || "Destination unavailable"}
-										</h2>
+										<h2>{selectedStop?.name ?? "Loading stop…"}</h2>
+										<p>
+											{selectedStop?.description ||
+												"Departures from this platform"}
+										</p>
 									</div>
 								</div>
-								<div className="vehicle-metrics">
-									<div>
-										<span>Speed</span>
-										<strong>
-											{selectedVehicle.speed}
-											<small> km/h</small>
-										</strong>
-									</div>
-									<div>
-										<span>Schedule deviation</span>
-										<strong>
-											{!selectedFresh || selectedVehicle.delay === null
-												? "Unknown"
-												: Math.abs(selectedVehicle.delay) < 60
-													? "On time"
-													: `${Math.round(Math.abs(selectedVehicle.delay) / 60)} min ${selectedVehicle.delay > 0 ? "late" : "early"}`}
-										</strong>
-									</div>
+								<div className="stop-route-list">
+									{selectedStop?.routeIds.map((id) => (
+										<RouteBadge key={id} route={routeById.get(id)} />
+									))}
 								</div>
-								<p
-									className={`vehicle-update ${selectedFresh ? "" : "warning"}`}
-								>
-									<span
-										className={`status-dot ${selectedFresh ? "" : "offline"}`}
-									/>
-									{selectedFresh ? "Live position" : "Last known position"} ·{" "}
-									{Math.max(
-										0,
-										Math.floor((now - selectedVehicle.measuredAt) / 1000),
-									)}
-									s ago
-								</p>
-								<button
-									className="locate-button secondary"
-									type="button"
-									onClick={() => focusOn(selectedVehicle)}
-								>
-									<Navigation size={16} />
-									Center on this vehicle
-								</button>
 								<div className="section-heading">
-									<h3>Stops on this trip</h3>
-									<span>{trip.data?.stops.length ?? "—"} stops</span>
+									<h3>Upcoming departures</h3>
+									<span>Vilnius time</span>
 								</div>
-								{!selectedVehicle.tripId && (
+								<details className="departure-explanation">
+									<summary>About arrival times</summary>
+									<p className="helper-text">
+										Live estimates use reported schedule deviation. Scheduled
+										times appear when live data is unavailable.
+									</p>
+								</details>
+								{board.error && (
+									<div className="notice warning" role="status">
+										Couldn’t refresh departures. Any previous estimates may be
+										outdated.
+										<button type="button" onClick={board.retry}>
+											Try again
+										</button>
+									</div>
+								)}
+								{!board.data && !board.error && (
+									<p className="loading-text">Loading departures…</p>
+								)}
+								{board.data?.stale && (
 									<p className="notice">
-										This vehicle has no matching trip information. Its position
-										is still shown.
+										Some sources are unavailable; times may be scheduled or
+										based on a saved timetable.
 									</p>
 								)}
-								{selectedVehicle.tripId && !trip.data && !trip.error && (
-									<p className="loading-text">Loading route…</p>
+								{board.data?.departures
+									.filter((d) => d.estimatedAt >= now)
+									.slice(0, 20)
+									.map((d) => {
+										const isLive =
+											d.live &&
+											!board.error &&
+											now - (board.data?.generatedAt ?? 0) < 120_000;
+										return (
+											<button
+												type="button"
+												className="departure-row"
+												key={`${d.tripId}-${d.scheduledAt}`}
+												onClick={() => {
+													if (
+														d.vehicleId &&
+														vehicles.some((v) => v.id === d.vehicleId)
+													)
+														selectVehicle(d.vehicleId);
+													else setPreviewTrip(d.tripId);
+												}}
+											>
+												<RouteBadge route={routeById.get(d.routeId)} />
+												<span className="row-main">
+													<strong>{d.destination}</strong>
+													<small>
+														{isLive
+															? "Live estimate"
+															: d.live
+																? "Last estimate · outdated"
+																: "Scheduled"}{" "}
+														· {timeFormat.format(d.scheduledAt)}
+													</small>
+												</span>
+												<span
+													className={`departure-time ${isLive ? "live" : ""}`}
+												>
+													<strong>
+														{Math.max(
+															1,
+															Math.ceil((d.estimatedAt - now) / 60_000),
+														)}
+														<small> min</small>
+													</strong>
+													{isLive && <Radio size={12} />}
+												</span>
+											</button>
+										);
+									})}
+								{board.data &&
+									!board.data.departures.some((d) => d.estimatedAt >= now) && (
+										<div className="empty-state">
+											<Clock3 size={25} />
+											<h3>No upcoming departures</h3>
+											<p>
+												No boarding services are scheduled here in the next 24
+												hours.
+											</p>
+										</div>
+									)}
+								{previewTrip && (
+									<p className="helper-text">
+										Selected departure’s route is highlighted on the map.
+									</p>
 								)}
-								{trip.data?.stops.map((stop, index) => (
+							</>
+						) : selection?.type === "vehicle" ? (
+							selectedVehicle ? (
+								<>
+									<div className="detail-heading">
+										<RouteBadge
+											route={
+												selectedVehicle.routeId
+													? routeById.get(selectedVehicle.routeId)
+													: undefined
+											}
+											label={selectedVehicle.route}
+										/>
+										<div>
+											<span className="eyebrow">
+												{selectedVehicle.mode === "bus" ? "Bus" : "Trolleybus"}{" "}
+												· {selectedVehicle.number}
+											</span>
+											<h2>
+												{selectedVehicle.destination ||
+													"Destination unavailable"}
+											</h2>
+										</div>
+									</div>
+									<div className="vehicle-metrics">
+										<div>
+											<span>Speed</span>
+											<strong>
+												{selectedVehicle.speed}
+												<small> km/h</small>
+											</strong>
+										</div>
+										<div>
+											<span>Schedule deviation</span>
+											<strong>
+												{!selectedFresh || selectedVehicle.delay === null
+													? "Unknown"
+													: Math.abs(selectedVehicle.delay) < 60
+														? "On time"
+														: `${Math.round(Math.abs(selectedVehicle.delay) / 60)} min ${selectedVehicle.delay > 0 ? "late" : "early"}`}
+											</strong>
+										</div>
+									</div>
+									<p
+										className={`vehicle-update ${selectedFresh ? "" : "warning"}`}
+									>
+										<span
+											className={`status-dot ${selectedFresh ? "" : "offline"}`}
+										/>
+										{selectedFresh ? "Live position" : "Last known position"} ·{" "}
+										{Math.max(
+											0,
+											Math.floor((now - selectedVehicle.measuredAt) / 1000),
+										)}
+										s ago
+									</p>
+									<button
+										className="locate-button secondary"
+										type="button"
+										onClick={() => focusOn(selectedVehicle)}
+									>
+										<Navigation size={16} />
+										Center on this vehicle
+									</button>
+									<div className="section-heading">
+										<h3>Stops on this trip</h3>
+										<span>{trip.data?.stops.length ?? "—"} stops</span>
+									</div>
+									{!selectedVehicle.tripId && (
+										<p className="notice">
+											This vehicle has no matching trip information. Its
+											position is still shown.
+										</p>
+									)}
+									{selectedVehicle.tripId && !trip.data && !trip.error && (
+										<p className="loading-text">Loading route…</p>
+									)}
+									{trip.data?.stops.map((stop, index) => (
+										<button
+											type="button"
+											className="trip-stop"
+											key={`${stop.id}-${index}`}
+											onClick={() => selectStop(stop.id)}
+										>
+											<span className="stop-sequence">{index + 1}</span>
+											<span>{stop.name}</span>
+											<ChevronRight size={15} />
+										</button>
+									))}
+								</>
+							) : (
+								<div className="empty-state">
+									<BusFront size={25} />
+									<h3>Vehicle no longer reporting</h3>
+									<p>
+										It may have finished its trip. Choose another vehicle from
+										the map.
+									</p>
+								</div>
+							)
+						) : (
+							<>
+								<div className="section-heading">
+									<h2>{needle ? "Matching stops" : "Nearby stops"}</h2>
+									<span>
+										{location ? "From your location" : "From map center"}
+									</span>
+								</div>
+								{!network.data && !network.error && (
+									<p className="loading-text">
+										Loading Vilnius stops and routes…
+									</p>
+								)}
+								{nearbyStops.map(({ stop, distance: metresAway }) => (
 									<button
 										type="button"
-										className="trip-stop"
-										key={`${stop.id}-${index}`}
+										className="stop-card"
+										key={stop.id}
 										onClick={() => selectStop(stop.id)}
 									>
-										<span className="stop-sequence">{index + 1}</span>
-										<span>{stop.name}</span>
+										<span className="stop-card-icon">
+											<MapPin size={19} />
+										</span>
+										<span className="row-main">
+											<strong>{stop.name}</strong>
+											<small>
+												{metres(metresAway)} away
+												{stop.description ? ` · ${stop.description}` : ""}
+											</small>
+											<span className="stop-route-list">
+												{stop.routeIds.slice(0, 6).map((id) => (
+													<RouteBadge key={id} route={routeById.get(id)} />
+												))}
+												{stop.routeIds.length > 6 && (
+													<span className="more-routes">
+														+{stop.routeIds.length - 6}
+													</span>
+												)}
+											</span>
+										</span>
+										<ChevronRight size={17} />
+									</button>
+								))}
+								{network.data && !nearbyStops.length && (
+									<div className="empty-state">
+										<Search size={24} />
+										<h3>No matching stops</h3>
+										<p>Try another name or clear the route filters.</p>
+										<button
+											type="button"
+											className="text-button"
+											onClick={resetFilters}
+										>
+											Clear filters
+										</button>
+									</div>
+								)}
+								<div className="section-heading vehicles-heading">
+									<h2>Vehicles nearby</h2>
+									<span>{filteredVehicles.length} matching</span>
+								</div>
+								{nearbyVehicles.map(({ vehicle, distance: metresAway }) => (
+									<button
+										className="departure-row"
+										type="button"
+										key={vehicle.id}
+										onClick={() => selectVehicle(vehicle.id)}
+									>
+										<RouteBadge
+											route={
+												vehicle.routeId
+													? routeById.get(vehicle.routeId)
+													: undefined
+											}
+											label={vehicle.route}
+										/>
+										<span className="row-main">
+											<strong>
+												{vehicle.destination || "Destination unavailable"}
+											</strong>
+											<small>
+												{metres(metresAway)} away ·{" "}
+												{freshVehicle(vehicle, now) && !feedStale
+													? "Live"
+													: "Last known position"}
+											</small>
+										</span>
 										<ChevronRight size={15} />
 									</button>
 								))}
+								{live.data && !nearbyVehicles.length && (
+									<p className="notice">
+										No vehicles match this area or filter right now.
+										<button type="button" onClick={resetFilters}>
+											Show all vehicles
+										</button>
+									</p>
+								)}
 							</>
-						) : (
-							<div className="empty-state">
-								<BusFront size={25} />
-								<h3>Vehicle no longer reporting</h3>
-								<p>
-									It may have finished its trip. Choose another vehicle from the
-									map.
-								</p>
-							</div>
-						)
-					) : (
-						<>
-							<div className="section-heading">
-								<h2>{needle ? "Matching stops" : "Nearby stops"}</h2>
-								<span>
-									{location ? "From your location" : "From map center"}
-								</span>
-							</div>
-							{!network.data && !network.error && (
-								<p className="loading-text">
-									Loading Vilnius stops and routes…
-								</p>
-							)}
-							{nearbyStops.map(({ stop, distance: metresAway }) => (
-								<button
-									type="button"
-									className="stop-card"
-									key={stop.id}
-									onClick={() => selectStop(stop.id)}
-								>
-									<span className="stop-card-icon">
-										<MapPin size={19} />
-									</span>
-									<span className="row-main">
-										<strong>{stop.name}</strong>
-										<small>
-											{metres(metresAway)} away
-											{stop.description ? ` · ${stop.description}` : ""}
-										</small>
-										<span className="stop-route-list">
-											{stop.routeIds.slice(0, 6).map((id) => (
-												<RouteBadge key={id} route={routeById.get(id)} />
-											))}
-											{stop.routeIds.length > 6 && (
-												<span className="more-routes">
-													+{stop.routeIds.length - 6}
-												</span>
-											)}
-										</span>
-									</span>
-									<ChevronRight size={17} />
+						)}
+						{trip.error && selection && (
+							<div className="notice warning">
+								Route details are unavailable.
+								<button type="button" onClick={trip.retry}>
+									Retry route
 								</button>
-							))}
-							{network.data && !nearbyStops.length && (
-								<div className="empty-state">
-									<Search size={24} />
-									<h3>No matching stops</h3>
-									<p>Try another name or clear the route filters.</p>
-									<button
-										type="button"
-										className="text-button"
-										onClick={resetFilters}
-									>
-										Clear filters
-									</button>
-								</div>
-							)}
-							<div className="section-heading vehicles-heading">
-								<h2>Buses around you</h2>
-								<span>{filteredVehicles.length} matching</span>
 							</div>
-							{nearbyVehicles.map(({ vehicle, distance: metresAway }) => (
-								<button
-									className="departure-row"
-									type="button"
-									key={vehicle.id}
-									onClick={() => selectVehicle(vehicle.id)}
-								>
-									<RouteBadge
-										route={
-											vehicle.routeId
-												? routeById.get(vehicle.routeId)
-												: undefined
-										}
-										label={vehicle.route}
-									/>
-									<span className="row-main">
-										<strong>
-											{vehicle.destination || "Destination unavailable"}
-										</strong>
-										<small>
-											{metres(metresAway)} away ·{" "}
-											{freshVehicle(vehicle, now) && !feedStale
-												? "Live"
-												: "Last known position"}
-										</small>
-									</span>
-									<ChevronRight size={15} />
-								</button>
-							))}
-							{live.data && !nearbyVehicles.length && (
-								<p className="notice">
-									No vehicles match this area or filter right now.
-									<button type="button" onClick={resetFilters}>
-										Show all vehicles
-									</button>
-								</p>
-							)}
-						</>
-					)}
-					{trip.error && selection && (
-						<div className="notice warning">
-							Route details are unavailable.
-							<button type="button" onClick={trip.retry}>
-								Retry route
-							</button>
-						</div>
-					)}
+						)}
+					</div>
 				</div>
 				<footer className="panel-footer">
 					<span className={`status-dot ${feedStale ? "offline" : ""}`} />
@@ -746,13 +896,20 @@ export default function TransitExplorer() {
 			<section className="map-panel" aria-label="Map and live vehicles">
 				<TransitMap
 					city={city.collection}
+					routes={routes}
+					tripColor={serviceColor(
+						routeById.get(trip.data?.routeId ?? "")?.name ?? "",
+						routeById.get(trip.data?.routeId ?? "")?.mode,
+						routeById.get(trip.data?.routeId ?? "")?.color,
+					)}
+					onCityPin={() => setSheet("peek")}
 					cityDelayed={city.enabled.filter((id) => {
 						const feed = city.feeds[id];
 						return (
 							!!feed.error ||
 							feed.data?.stale ||
 							(!!feed.data &&
-								!["parking", "signals", "corridors"].includes(id) &&
+								!["parking", "signals", "corridors", "shelters"].includes(id) &&
 								now - feed.data.fetchedAt > 120000)
 						);
 					})}
@@ -788,29 +945,51 @@ export default function TransitExplorer() {
 								: "Live transport"}
 					</div>
 				</div>
-				<div className="map-bottom-card">
-					<div>
-						<span className="eyebrow">A LITTLE LESS WAITING.</span>
-						<strong>A little more city.</strong>
-						<p>Select a stop to see what’s coming.</p>
-					</div>
-					<span className="map-card-icon">
-						<BusFront size={30} />
-					</span>
+				<div className="map-actions">
+					<button
+						type="button"
+						className="map-location"
+						aria-label="Find my location"
+						onClick={locate}
+						disabled={locating}
+					>
+						<LocateFixed size={21} className={locating ? "spin" : ""} />
+					</button>
+					<button
+						type="button"
+						className="map-layer-button"
+						aria-label="Open city layers"
+						onClick={openLayers}
+					>
+						<Layers2 size={20} />
+						<span>{city.enabled.length}</span>
+					</button>
 				</div>
 				<div className="map-legend">
+					{Object.entries(SERVICE_COLORS).map(([service, color]) => (
+						<span key={service}>
+							<i style={{ background: color }} />
+							{
+								{
+									express: "Express",
+									bus: "Bus",
+									trolleybus: "Trolley",
+									night: "Night",
+									river: "River",
+								}[service]
+							}
+						</span>
+					))}
 					<span>
-						<i className="legend-bus" />
-						Bus
-					</span>
-					<span>
-						<i className="legend-trolley" />
-						Trolleybus
-					</span>
-					<span>
-						<i className="legend-stop" />
+						<MapSymbol kind="stop" color="#495c79" />
 						Stop
 					</span>
+					{city.enabled.includes("shelters") && (
+						<span>
+							<MapSymbol kind="shelters" color="#a74716" />
+							Shelter
+						</span>
+					)}
 					<span className="legend-faded">Faded = older position</span>
 				</div>
 				<a
@@ -822,6 +1001,32 @@ export default function TransitExplorer() {
 					Transit data: JUDU / stops.lt ↗
 				</a>
 			</section>
+			<nav className="mobile-dock" aria-label="Map views">
+				<button
+					type="button"
+					aria-pressed={sheet === "peek"}
+					onClick={() => setSheet("peek")}
+				>
+					<MapIcon size={21} />
+					<span>Map</span>
+				</button>
+				<button
+					type="button"
+					aria-pressed={sheet !== "peek" && !cityOpen}
+					onClick={openNearby}
+				>
+					<BusFront size={21} />
+					<span>Nearby</span>
+				</button>
+				<button
+					type="button"
+					aria-pressed={sheet !== "peek" && cityOpen}
+					onClick={openLayers}
+				>
+					<Layers2 size={21} />
+					<span>Layers</span>
+				</button>
+			</nav>
 		</main>
 	);
 }

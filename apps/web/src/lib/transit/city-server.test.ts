@@ -52,7 +52,7 @@ test("ArcGIS batches all IDs, shares fetches, accepts empty layers and preserves
 		assert.equal(first.collection.features.length, 1049);
 		assert.equal(shared.stale, false);
 		assert.equal(idCalls, 4);
-		assert.equal(batches, 4);
+		assert.equal(batches, 6);
 		fail = true;
 		now += 61000;
 		const saved = await getCityLayer("congestion");

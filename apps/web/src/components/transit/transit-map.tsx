@@ -3,22 +3,36 @@
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import { freshVehicle } from "@/lib/transit/core";
-import type { Position, Stop, TripDetail, Vehicle } from "@/lib/transit/types";
+import { serviceColor } from "@/lib/transit/service-colors";
+import type {
+	Position,
+	Stop,
+	TransitRoute,
+	TripDetail,
+	Vehicle,
+} from "@/lib/transit/types";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { ENV } from "@/env";
 
-import type { CityCollection, CityLayerId } from "@/lib/transit/city";
-
+import {
+	CITY_LAYERS,
+	type CityCollection,
+	type CityLayerId,
+} from "@/lib/transit/city";
 import { cityPopupContent } from "./city-popup";
+import { mapSymbolImage } from "./map-symbol";
 
 type Props = {
 	city: CityCollection;
 	cityDelayed: CityLayerId[];
+	onCityPin: () => void;
 	stale: boolean;
 	now: number;
 	vehicles: Vehicle[];
 	stops: Stop[];
 	trip?: TripDetail;
+	tripColor: string;
+	routes: TransitRoute[];
 	selectedId?: string;
 	location: Position | null;
 	focus: (Position & { key: number }) | null;
@@ -77,7 +91,7 @@ export default function TransitMap(props: Props) {
 							id: "osm",
 							type: "raster",
 							source: "osm",
-							paint: { "raster-saturation": -0.55 },
+							paint: { "raster-saturation": -0.72, "raster-contrast": -0.08 },
 						},
 					],
 				},
@@ -110,11 +124,25 @@ export default function TransitMap(props: Props) {
 			if (instance.areTilesLoaded()) setError(null);
 		});
 		instance.on("load", () => {
+			for (const layer of CITY_LAYERS)
+				instance.addImage(
+					`symbol-${layer.id}`,
+					mapSymbolImage(layer.id, layer.color),
+					{ pixelRatio: 2 },
+				);
+			instance.addImage("symbol-stop", mapSymbolImage("stop", "#495c79"), {
+				pixelRatio: 2,
+			});
+			instance.addImage(
+				"symbol-selected-stop",
+				mapSymbolImage("stop", "#204bcc", true),
+				{ pixelRatio: 2 },
+			);
 			instance.addSource("city", {
 				type: "geojson",
 				data: { type: "FeatureCollection", features: [] },
 				attribution:
-					'© <a href="https://judu.lt/atviri-duomenys/" target="_blank" rel="noopener noreferrer">JUDU / Vilnius</a>',
+					'© <a href="https://judu.lt/atviri-duomenys/" target="_blank" rel="noopener noreferrer">JUDU / Vilnius</a> · <a href="https://open.geodata.gov.lt/datasets/8a1e4b06ca714e2983b67c737c667abe_0/">Shelters: PAGD / VDA (CC BY 4.0)</a>',
 			});
 			instance.addLayer({
 				id: "city-fill",
@@ -141,14 +169,24 @@ export default function TransitMap(props: Props) {
 			});
 			instance.addLayer({
 				id: "city-point",
-				type: "circle",
+				type: "symbol",
 				source: "city",
 				filter: ["==", ["geometry-type"], "Point"],
-				paint: {
-					"circle-color": ["get", "color"],
-					"circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 4, 15, 7],
-					"circle-stroke-color": "#ffffff",
-					"circle-stroke-width": 2,
+				layout: {
+					"icon-image": ["concat", "symbol-", ["get", "category"]],
+					"icon-size": [
+						"interpolate",
+						["linear"],
+						["zoom"],
+						10,
+						0.65,
+						15,
+						0.9,
+						18,
+						1,
+					],
+					"icon-allow-overlap": false,
+					"icon-padding": 5,
 				},
 			});
 			const dismissHover = () => {
@@ -161,8 +199,9 @@ export default function TransitMap(props: Props) {
 					return;
 				if (
 					(target instanceof Element && target.closest(".vehicle-pin")) ||
-					instance.queryRenderedFeatures(e.point, { layers: ["stops-points"] })
-						.length
+					instance.queryRenderedFeatures(e.point, {
+						layers: ["selected-stop", "stops-points"],
+					}).length
 				) {
 					if (pinned) cityPopup.current?.popup.remove();
 					else dismissHover();
@@ -204,6 +243,7 @@ export default function TransitMap(props: Props) {
 					)
 					.setDOMContent(cityPopupContent(feature, pinned, stale))
 					.addTo(instance);
+				if (pinned) handlers.current.onCityPin();
 				cityPopup.current = {
 					popup,
 					id: feature.properties.id,
@@ -213,6 +253,20 @@ export default function TransitMap(props: Props) {
 				popup.on("close", () => {
 					if (cityPopup.current?.popup === popup) cityPopup.current = null;
 				});
+				if (pinned) {
+					// Pin before moving: map motion should dismiss previews, not this detail.
+					instance.flyTo({
+						center: popup.getLngLat(),
+						zoom: Math.max(instance.getZoom(), 16),
+						offset: window.matchMedia("(min-width: 900px)").matches
+							? [180, 80]
+							: [0, 80],
+						duration: window.matchMedia("(prefers-reduced-motion: reduce)")
+							.matches
+							? 0
+							: 800,
+					});
+				}
 			};
 			instance.on("click", (e) => showCity(e, true));
 			instance.on("mousemove", (e) => {
@@ -235,7 +289,7 @@ export default function TransitMap(props: Props) {
 				type: "line",
 				source: "route",
 				paint: {
-					"line-color": "#137867",
+					"line-color": ["get", "color"],
 					"line-width": 5,
 					"line-opacity": 0.85,
 				},
@@ -246,29 +300,28 @@ export default function TransitMap(props: Props) {
 			});
 			instance.addLayer({
 				id: "stops-points",
-				type: "circle",
+				type: "symbol",
 				source: "stops",
 				minzoom: 12,
-				paint: {
-					"circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 16, 7],
-					"circle-color": "#fff",
-					"circle-stroke-color": "#526e75",
-					"circle-stroke-width": 2,
+				layout: {
+					"icon-image": "symbol-stop",
+					"icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.65, 16, 0.9],
+					"icon-allow-overlap": false,
+					"icon-padding": 4,
 				},
 			});
 			instance.addLayer({
 				id: "selected-stop",
-				type: "circle",
+				type: "symbol",
 				source: "stops",
 				filter: ["==", ["get", "id"], ""],
-				paint: {
-					"circle-radius": 10,
-					"circle-color": "#167568",
-					"circle-stroke-width": 3,
-					"circle-stroke-color": "#ffffff",
+				layout: {
+					"icon-image": "symbol-selected-stop",
+					"icon-size": 1.1,
+					"icon-allow-overlap": true,
 				},
 			});
-			instance.on("click", "stops-points", (e) => {
+			instance.on("click", ["selected-stop", "stops-points"], (e) => {
 				const id = e.features?.[0]?.properties?.id;
 				if (id) handlers.current.onStop(String(id));
 			});
@@ -349,7 +402,7 @@ export default function TransitMap(props: Props) {
 					? [
 							{
 								type: "Feature",
-								properties: {},
+								properties: { color: props.tripColor },
 								geometry: {
 									type: "LineString",
 									coordinates: props.trip.coordinates,
@@ -358,7 +411,7 @@ export default function TransitMap(props: Props) {
 						]
 					: [],
 		});
-	}, [ready, props.trip]);
+	}, [ready, props.trip, props.tripColor]);
 	useEffect(() => {
 		if (!ready || !map.current) return;
 		const ids = new Set(props.vehicles.map((v) => v.id));
@@ -391,6 +444,12 @@ export default function TransitMap(props: Props) {
 				!freshVehicle(vehicle, props.now) || props.stale,
 			);
 			button.classList.toggle("selected", props.selectedId === vehicle.id);
+			button.style.background = serviceColor(
+				vehicle.route,
+				vehicle.mode,
+				props.routes.find((r) => r.id === vehicle.routeId)?.color,
+			);
+			button.style.color = "white";
 			button.textContent = vehicle.route;
 			button.setAttribute(
 				"aria-label",
@@ -399,7 +458,14 @@ export default function TransitMap(props: Props) {
 			button.title = `${vehicle.route} → ${vehicle.destination}`;
 			button.style.setProperty("--heading", `${vehicle.heading}deg`);
 		}
-	}, [ready, props.vehicles, props.selectedId, props.stale, props.now]);
+	}, [
+		ready,
+		props.vehicles,
+		props.selectedId,
+		props.stale,
+		props.now,
+		props.routes,
+	]);
 	useEffect(() => {
 		if (!ready || !map.current) return;
 		if (!props.location) {
@@ -421,6 +487,9 @@ export default function TransitMap(props: Props) {
 		if (ready && props.focus)
 			map.current?.flyTo({
 				center: [props.focus.lon, props.focus.lat],
+				offset: window.matchMedia("(min-width: 900px)").matches
+					? [180, 0]
+					: [0, 0],
 				zoom: 15,
 				duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches
 					? 0

@@ -1,7 +1,8 @@
 "use client";
 
-import { api } from "@MoveSmart/backend/convex/_generated/api";
-import { Authenticated, AuthLoading, Unauthenticated, useQuery } from "convex/react";
+import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
+import { UserRound } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import SignInForm from "@/components/sign-in-form";
@@ -9,35 +10,41 @@ import SignUpForm from "@/components/sign-up-form";
 import UserMenu from "@/components/user-menu";
 
 function DashboardContent() {
-  const privateData = useQuery(api.privateData.get);
-
-  return (
-    <div>
-      <h1>Dashboard</h1>
-      <p>privateData: {privateData?.message}</p>
-      <UserMenu />
-    </div>
-  );
+	return (
+		<section className="account-panel">
+			<span className="account-symbol">
+				<UserRound size={30} />
+			</span>
+			<h1>Your account.</h1>
+			<p>
+				You’re signed in. Explore Vilnius or use the account menu to sign out.
+			</p>
+			<UserMenu />
+			<Link href="/" className="account-link">
+				Explore the live map
+			</Link>
+		</section>
+	);
 }
 
 export default function DashboardPage() {
-  const [showSignIn, setShowSignIn] = useState(false);
+	const [showSignIn, setShowSignIn] = useState(false);
 
-  return (
-    <>
-      <Authenticated>
-        <DashboardContent />
-      </Authenticated>
-      <Unauthenticated>
-        {showSignIn ? (
-          <SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
-        ) : (
-          <SignUpForm onSwitchToSignIn={() => setShowSignIn(true)} />
-        )}
-      </Unauthenticated>
-      <AuthLoading>
-        <div>Loading...</div>
-      </AuthLoading>
-    </>
-  );
+	return (
+		<main className="account-page">
+			<Authenticated>
+				<DashboardContent />
+			</Authenticated>
+			<Unauthenticated>
+				{showSignIn ? (
+					<SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
+				) : (
+					<SignUpForm onSwitchToSignIn={() => setShowSignIn(true)} />
+				)}
+			</Unauthenticated>
+			<AuthLoading>
+				<p role="status">Loading your account…</p>
+			</AuthLoading>
+		</main>
+	);
 }

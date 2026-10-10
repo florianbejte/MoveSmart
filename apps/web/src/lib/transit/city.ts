@@ -1,6 +1,14 @@
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 
+export const SHELTER_SOURCE =
+	"https://open.geodata.gov.lt/datasets/8a1e4b06ca714e2983b67c737c667abe_0/";
 export const CITY_LAYERS = [
+	{
+		id: "shelters",
+		label: "Civil-protection shelters",
+		color: "#a74716",
+		note: "Priedangos across Lithuania. Published capacity and access information; no live occupancy or opening status.",
+	},
 	{
 		id: "incidents",
 		label: "Transit alerts",
@@ -182,6 +190,37 @@ export function normaliseCityFeature(
 		description = [text("numeris"), text("valdymometodas")]
 			.filter(Boolean)
 			.join(" · ");
+	if (category === "shelters") {
+		const positive = (key: string) =>
+			typeof p[key] === "number" && Number.isFinite(p[key]) && p[key] > 0
+				? p[key]
+				: null;
+		const flag = (key: string) =>
+			p[key] === 1 ? "Yes" : p[key] === 0 ? "No" : "Not reported";
+		const updated = timestamp("atnaujinimodata");
+		title = text("pavadinimas") || "Civil-protection shelter";
+		description = [
+			[
+				text("gatve"),
+				text("namonumeris"),
+				text("gyvenviete"),
+				text("savivaldybe") !== text("gyvenviete") ? text("savivaldybe") : "",
+			]
+				.filter(Boolean)
+				.join(" "),
+			`Published capacity: ${positive("gyventojuskaicius") ?? "Not reported"}${positive("gyventojuskaicius") ? " people" : ""}`,
+			`Adapted for people with disabilities: ${flag("pritaikytaasmenimssunegalia")}`,
+			`24-hour entry: ${flag("patekimasvisapara")}`,
+			text("darbovalandos") && `Entry hours: ${text("darbovalandos")}`,
+			positive("plotas") && `Area: ${positive("plotas")} m²`,
+			text("pastabos"),
+			updated &&
+				`Record updated: ${new Date(updated).toISOString().slice(0, 10)}`,
+		]
+			.filter(Boolean)
+			.join("\n");
+		timing = "Published information · live access and occupancy unknown";
+	}
 	const id = `${source}/${String(p.objectid ?? feature.id ?? "")}`;
 	return {
 		type: "Feature",
@@ -202,7 +241,7 @@ export function normaliseCityFeature(
 			end,
 			timing,
 			color,
-			source,
+			source: category === "shelters" ? SHELTER_SOURCE : source,
 		},
 	};
 }

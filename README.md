@@ -196,3 +196,31 @@ live severity labels. Parking gives boundaries, not prices or availability; sign
 and corridors describe infrastructure, not current red/green phases. Undocumented
 GPS vehicle-type and interval codes remain unused. These integrations do not include
 third-party Waze data or establish additional rights beyond the providers' terms.
+
+### Mobile-first interface
+
+The transit sheet has three positions: tap **Map** for the full map, **Nearby** or
+**Layers** for a half sheet, and the handle/chevron to expand it. The handle also
+supports swiping. Stop and vehicle selection opens a taller detail sheet; search
+opens the expanded view. Tapping a city feature pins its popup and reveals the map.
+Route and transport filters live behind the sliders button next to search. All
+existing data sources and map overlays remain available.
+
+The interface uses locally hosted Manrope, matching blue/yellow route signs across
+the map and departure lists, and action-driven sheet, view, and switch transitions.
+It respects reduced-motion preferences. See [DESIGN.md](DESIGN.md) for the design
+plan and visual tokens.
+
+### Shelters and service colours
+
+Enable **City layers → Civil-protection shelters** to show Lithuania’s published
+shelter network. Hover or tap a point for its address, published capacity,
+disability adaptation, entry hours, and record update date. Missing access values
+remain unknown; capacity is not live occupancy. Data: PAGD / Valstybės duomenų
+agentūra, [CC BY 4.0 dataset](https://open.geodata.gov.lt/datasets/8a1e4b06ca714e2983b67c737c667abe_0/).
+The server caches the national layer for six hours and retrieves bounded ID
+batches to avoid ArcGIS transfer and URL-length limits.
+
+Transit markers, badges and selected route lines use GTFS `route_color`.
+Missing colours fall back to green express, blue regular bus, red trolleybus,
+black night bus, or teal L1. L1 colour support does not imply a live river feed.

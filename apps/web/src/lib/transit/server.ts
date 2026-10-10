@@ -9,6 +9,7 @@ import {
 	serviceStart,
 	shiftDate,
 } from "./core";
+import { serviceColor } from "./service-colors";
 import type {
 	Departure,
 	LiveFeed,
@@ -78,7 +79,12 @@ async function loadSchedule(): Promise<Schedule> {
 					: "other",
 		color: /^[a-f\d]{6}$/i.test(r.route_color)
 			? `#${r.route_color}`
-			: "#167568",
+			: serviceColor(
+					r.route_short_name,
+					r.route_id.includes("trolley") || r.route_type === "800"
+						? "trolleybus"
+						: "bus",
+				),
 	}));
 	const supported = new Set(
 		routes.filter((r) => r.mode !== "other").map((r) => r.id),
