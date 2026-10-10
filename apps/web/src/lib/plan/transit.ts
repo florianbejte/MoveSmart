@@ -95,3 +95,125 @@ export function findRides(q: RideSearch): TransitRide[] {
 		)
 		.slice(0, 4);
 }
+
+export type TransferTrip = {
+	/** First bus, then second bus. leg[0].walkToMetres is the walk from the start,
+	 * leg[1].walkToMetres the walk between stops when changing, leg[1].walkFromMetres the walk to the destination. */
+	legs: [TransitRide, TransitRide];
+};
+export type TransferSearch = RideSearch & {
+	/** Stops within a short walk of a stop (including itself at 0 m), for changing buses. */
+	nearbyStops: (stopId: string) => Map<string, number>;
+	minChangeMinutes?: number;
+	maxChangeWaitMinutes?: number;
+};
+
+/** Trips with exactly one change, fastest door to door first, at most one per pair of routes. */
+export function findTransfers(q: TransferSearch): TransferTrip[] {
+	const horizon = q.now + (q.horizonMinutes ?? 90) * 60_000;
+	const minChange = q.minChangeMinutes ?? 2;
+	const maxWait = (q.maxChangeWaitMinutes ?? 25) * 60_000;
+	const doorMs = (m: number) => q.walkMinutes(m) * 60_000;
+	// 1. Earliest arrival at every stop reachable by one bus from near the start.
+	const reached = new Map<string, TransitRide>();
+	for (const [fromStopId, walkTo] of q.origins) {
+		const ready = q.now + doorMs(walkTo);
+		for (const visit of q.departures(fromStopId)) {
+			if (!visit.pickup) continue;
+			const routeId = q.routeOf(visit.tripId);
+			if (!routeId) continue;
+			for (const start of q.serviceStarts(visit.tripId)) {
+				const delay = q.delayOf(visit.tripId, start);
+				const departAt = start + (visit.time + (delay ?? 0)) * 1000;
+				if (departAt < ready || departAt > horizon) continue;
+				for (const later of q.tripVisits(visit.tripId)) {
+					if (later.sequence <= visit.sequence || q.origins.has(later.stopId))
+						continue;
+					const arriveAt = start + (later.time + (delay ?? 0)) * 1000;
+					const known = reached.get(later.stopId);
+					if (known && known.arriveAt <= arriveAt) continue;
+					reached.set(later.stopId, {
+						tripId: visit.tripId,
+						routeId,
+						fromStopId,
+						toStopId: later.stopId,
+						walkToMetres: walkTo,
+						walkFromMetres: 0,
+						departAt,
+						arriveAt,
+						stops: later.sequence - visit.sequence,
+						live: delay !== null,
+						delaySeconds: delay,
+					});
+				}
+			}
+		}
+	}
+	// 2. Trips that stop near the destination, with where they stop there.
+	const finals = new Map<string, Visit[]>();
+	for (const stopId of q.destinations.keys())
+		for (const visit of q.departures(stopId)) {
+			const list = finals.get(visit.tripId) ?? [];
+			list.push(visit);
+			finals.set(visit.tripId, list);
+		}
+	const boardings = new Map<string, Visit[]>();
+	const boardable = (stopId: string) => {
+		let list = boardings.get(stopId);
+		if (!list) {
+			list = q
+				.departures(stopId)
+				.filter((v) => v.pickup && finals.has(v.tripId));
+			boardings.set(stopId, list);
+		}
+		return list;
+	};
+	// 3. Change to a second bus that reaches the destination.
+	const best = new Map<string, TransferTrip & { door: number }>();
+	for (const [stopId, first] of reached) {
+		for (const [changeStopId, walk] of q.nearbyStops(stopId)) {
+			const ready = first.arriveAt + Math.max(minChange * 60_000, doorMs(walk));
+			for (const visit of boardable(changeStopId)) {
+				const routeId = q.routeOf(visit.tripId);
+				if (!routeId || routeId === first.routeId) continue;
+				const alight = (finals.get(visit.tripId) ?? [])
+					.filter((v) => v.sequence > visit.sequence)
+					.sort(
+						(a, b) =>
+							a.time * 1000 +
+							doorMs(q.destinations.get(a.stopId) ?? 0) -
+							(b.time * 1000 + doorMs(q.destinations.get(b.stopId) ?? 0)),
+					)[0];
+				if (!alight) continue;
+				for (const start of q.serviceStarts(visit.tripId)) {
+					const delay = q.delayOf(visit.tripId, start);
+					const departAt = start + (visit.time + (delay ?? 0)) * 1000;
+					if (departAt < ready || departAt > ready + maxWait) continue;
+					const walkFrom = q.destinations.get(alight.stopId) ?? 0;
+					const second: TransitRide = {
+						tripId: visit.tripId,
+						routeId,
+						fromStopId: changeStopId,
+						toStopId: alight.stopId,
+						walkToMetres: walk,
+						walkFromMetres: walkFrom,
+						departAt,
+						arriveAt: start + (alight.time + (delay ?? 0)) * 1000,
+						stops: alight.sequence - visit.sequence,
+						live: delay !== null,
+						delaySeconds: delay,
+					};
+					const door = second.arriveAt + doorMs(walkFrom);
+					const key = `${first.routeId}>${routeId}`;
+					const current = best.get(key);
+					if (!current || door < current.door)
+						best.set(key, { legs: [first, second], door });
+				}
+			}
+		}
+	}
+	return [...best.values()]
+		.sort((a, b) => a.door - b.door)
+		.slice(0, 3)
+		.map(({ legs }) => ({ legs }));
+}

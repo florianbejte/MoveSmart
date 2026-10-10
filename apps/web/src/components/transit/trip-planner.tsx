@@ -22,7 +22,7 @@ import {
 	X,
 	Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { GeocodeHit } from "@/lib/plan/geocode";
 import {
 	estimateOptions,
@@ -49,8 +49,9 @@ export type PlanPath = {
 	key: string;
 	from: Position;
 	to: Position;
-	/** The ride being taken, so the map can show only that bus. */
-	ride?: { routeId: string; tripId: string; stopIds: string[] };
+	/** The buses being taken, so the map can show only those. */
+	rides?: { routeId: string; tripId: string }[];
+	stopIds?: string[];
 	segments: {
 		kind: "walk" | "ride";
 		color: string;
@@ -75,6 +76,7 @@ const PATH_PROFILE: Record<Mode, "foot" | "bike" | "car"> = {
 	taxi: "car",
 	carshare: "car",
 };
+const legKey = (r: TransitRide) => `${r.tripId}:${r.fromStopId}:${r.toStopId}`;
 const pt = (p: Position) => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`;
 async function streetPath(
 	profile: "foot" | "bike" | "car",
@@ -90,12 +92,14 @@ async function streetPath(
 	return ((await response.json()) as { coordinates: [number, number][] })
 		.coordinates;
 }
+type NamedRide = TransitRide & {
+	fromStop: string;
+	toStop: string;
+	destination: string;
+};
 type PlanResponse = {
-	rides: (TransitRide & {
-		fromStop: string;
-		toStop: string;
-		destination: string;
-	})[];
+	rides: NamedRide[];
+	transfers?: { legs: [NamedRide, NamedRide] }[];
 	weather: Weather | null;
 	stale: boolean;
 	generatedAt: number;
@@ -227,6 +231,7 @@ export function TripPlanner({
 				to,
 				now: plan.data.generatedAt,
 				rides: plan.data.rides,
+				transfers: plan.data.transfers,
 				routeName: (id) => routes.get(id)?.name ?? "",
 				profile,
 			}),
@@ -235,6 +240,13 @@ export function TripPlanner({
 		);
 	}, [to, plan.data, profile, start, routes]);
 	const usable = ranked.filter((o) => !o.excluded);
+	// Stop names and headsigns from the server, for every bus in every option.
+	const named = new Map<string, NamedRide>();
+	for (const r of [
+		...(plan.data?.rides ?? []),
+		...(plan.data?.transfers ?? []).flatMap((t) => t.legs),
+	])
+		named.set(legKey(r), r);
 	const excluded = ranked.filter((o) => o.excluded);
 	const weather = plan.data?.weather ?? null;
 	const wf = weatherFactor(weather, profile.weatherSensitive);
@@ -255,37 +267,49 @@ export function TripPlanner({
 		}
 		const controller = new AbortController();
 		const { signal } = controller;
-		const ride = selected.ride;
+		const legs = selected.legs;
 		(async () => {
-			if (ride) {
-				const board = stops.find((s) => s.id === ride.fromStopId);
-				const alight = stops.find((s) => s.id === ride.toStopId);
-				if (!board || !alight) return;
-				const [walkTo, trip, walkFrom] = await Promise.all([
-					streetPath("foot", start, board, signal),
-					fetch(
-						`/api/transit?kind=trip&id=${encodeURIComponent(ride.tripId)}`,
-						{
+			if (legs?.length) {
+				const stop = (id: string) => stops.find((s) => s.id === id);
+				const ends = legs.map((l) => [stop(l.fromStopId), stop(l.toStopId)]);
+				if (ends.some(([a, b]) => !a || !b)) return;
+				const shapes = await Promise.all(
+					legs.map((l) =>
+						fetch(`/api/transit?kind=trip&id=${encodeURIComponent(l.tripId)}`, {
 							signal,
-						},
-					).then(
-						(r) => r.json() as Promise<{ coordinates: [number, number][] }>,
+						}).then(
+							(r) => r.json() as Promise<{ coordinates: [number, number][] }>,
+						),
 					),
-					streetPath("foot", alight, to, signal),
-				]);
-				const route = routes.get(ride.routeId);
-				const shape = sliceShape(trip.coordinates ?? [], board, alight);
-				onPath({
-					key: selectedKey,
-					from: start,
-					to,
-					ride: {
-						routeId: ride.routeId,
-						tripId: ride.tripId,
-						stopIds: [ride.fromStopId, ride.toStopId],
-					},
-					segments: [
-						{ kind: "walk", color: PATH_COLORS.walk, coordinates: walkTo },
+				);
+				// Walks: to the first stop, between stops when changing, and to the destination.
+				const walkPoints: [Position, Position][] = [
+					[start, ends[0][0] as Stop],
+					...legs
+						.slice(1)
+						.map(
+							(_leg, i) =>
+								[ends[i][1] as Stop, ends[i + 1][0] as Stop] as [
+									Position,
+									Position,
+								],
+						),
+					[ends[legs.length - 1][1] as Stop, to],
+				];
+				const walks = await Promise.all(
+					walkPoints.map(([a, b]) =>
+						distance(a, b) < 15
+							? Promise.resolve([] as [number, number][])
+							: streetPath("foot", a, b, signal),
+					),
+				);
+				const segments: PlanPath["segments"] = [];
+				legs.forEach((l, i) => {
+					const [board, alight] = ends[i] as [Stop, Stop];
+					const route = routes.get(l.routeId);
+					const shape = sliceShape(shapes[i].coordinates ?? [], board, alight);
+					segments.push(
+						{ kind: "walk", color: PATH_COLORS.walk, coordinates: walks[i] },
 						{
 							kind: "ride",
 							color: serviceColor(route?.name ?? "", route?.mode, route?.color),
@@ -297,8 +321,20 @@ export function TripPlanner({
 											[alight.lon, alight.lat],
 										],
 						},
-						{ kind: "walk", color: PATH_COLORS.walk, coordinates: walkFrom },
-					],
+					);
+				});
+				segments.push({
+					kind: "walk",
+					color: PATH_COLORS.walk,
+					coordinates: walks[legs.length],
+				});
+				onPath({
+					key: selectedKey,
+					from: start,
+					to,
+					rides: legs.map(({ routeId, tripId }) => ({ routeId, tripId })),
+					stopIds: legs.flatMap((l) => [l.fromStopId, l.toStopId]),
+					segments,
 				});
 				return;
 			}
@@ -505,7 +541,7 @@ export function TripPlanner({
 								best={i === 0 && !selected}
 								now={now}
 								routeColor={
-									o.ride
+									o.ride && (o.legs?.length ?? 1) === 1
 										? serviceColor(
 												routeName(o.ride.routeId),
 												routes.get(o.ride.routeId)?.mode,
@@ -513,7 +549,16 @@ export function TripPlanner({
 											)
 										: undefined
 								}
-								ride={plan.data?.rides.find((r) => r.tripId === o.ride?.tripId)}
+								legs={o.legs?.map(
+									(l) =>
+										named.get(legKey(l)) ?? {
+											...l,
+											fromStop: "",
+											toStop: "",
+											destination: "",
+										},
+								)}
+								routes={routes}
 								going={o.id === selected?.id}
 								onGo={() => {
 									setGoing(o.id);
@@ -564,7 +609,8 @@ function OptionCard({
 	best,
 	now,
 	routeColor,
-	ride,
+	legs,
+	routes,
 	going,
 	onGo,
 	trip,
@@ -573,12 +619,15 @@ function OptionCard({
 	best: boolean;
 	now: number;
 	routeColor?: string;
-	ride?: PlanResponse["rides"][number];
+	legs?: NamedRide[];
+	routes: Map<string, TransitRoute>;
 	going: boolean;
 	onGo: () => void;
 	trip: { from: Position; to: Place };
 }) {
 	const Icon = ICONS[o.mode];
+	const ride = legs?.[0];
+	const change = legs && legs.length > 1 ? legs[1] : undefined;
 	const leaveIn = Math.round((o.departAt - now) / 60_000);
 	const top = o.quotes?.find((q) => q.price !== null);
 	return (
@@ -602,12 +651,14 @@ function OptionCard({
 				<span className="row-main">
 					<strong>
 						{o.label}
-						{ride && <small> → {ride.destination}</small>}
+						{ride && !change && <small> → {ride.destination}</small>}
 					</strong>
 					<small>
-						{ride
-							? `${ride.fromStop} → ${ride.toStop} · ${ride.stops} stops`
-							: (o.notes[0] ?? "")}
+						{change
+							? `Change at ${legs?.[0].toStop}`
+							: ride
+								? `${ride.fromStop} → ${ride.toStop} · ${ride.stops} stops`
+								: (o.notes[0] ?? "")}
 					</small>
 				</span>
 				<span className="plan-time">
@@ -657,6 +708,7 @@ function OptionCard({
 					</span>
 				)}
 			</div>
+			{legs && legs.length > 0 && <Itinerary legs={legs} routes={routes} />}
 			{o.reasons.length > 0 && (
 				<ul className="plan-reasons">
 					{o.reasons.slice(0, best || going ? 4 : 2).map((r) => (
@@ -757,5 +809,94 @@ function Providers({
 				you book.
 			</p>
 		</div>
+	);
+}
+
+const metres = (m: number) =>
+	m < 1000
+		? `${Math.max(10, Math.round(m / 10) * 10)} m`
+		: `${(m / 1000).toFixed(1)} km`;
+
+/** Step by step: which bus, where to board and get off, where to change. */
+function Itinerary({
+	legs,
+	routes,
+}: {
+	legs: NamedRide[];
+	routes: Map<string, TransitRoute>;
+}) {
+	return (
+		<ol className="itinerary">
+			<li className="step-walk">
+				<Footprints size={14} />
+				<span>
+					Walk {metres(legs[0].walkToMetres)} to{" "}
+					<strong>{legs[0].fromStop}</strong>
+				</span>
+			</li>
+			{legs.map((leg, i) => {
+				const route = routes.get(leg.routeId);
+				const name = route?.name ?? "";
+				const delay = leg.delaySeconds ?? 0;
+				return (
+					<Fragment key={`${leg.tripId}-${leg.fromStopId}`}>
+						{i > 0 && (
+							<li className="step-walk">
+								<Footprints size={14} />
+								<span>
+									{leg.walkToMetres > 15 ? (
+										<>
+											Change: walk {metres(leg.walkToMetres)} to{" "}
+											<strong>{leg.fromStop}</strong>
+										</>
+									) : (
+										<>
+											Change at <strong>{leg.fromStop}</strong>
+										</>
+									)}
+								</span>
+							</li>
+						)}
+						<li className="step-ride">
+							<span
+								className="route-badge"
+								style={{
+									background: serviceColor(name, route?.mode, route?.color),
+									color: "white",
+								}}
+							>
+								{name}
+							</span>
+							<span>
+								<span>
+									<strong>
+										{route?.mode === "trolleybus" ? "Trolleybus" : "Bus"} {name}
+									</strong>{" "}
+									towards {leg.destination}
+								</span>
+								<small>
+									{leg.live && <Radio size={10} />} Board at{" "}
+									{time.format(leg.departAt)}
+									{leg.live
+										? Math.abs(delay) >= 60
+											? ` (live, ${Math.round(Math.abs(delay) / 60)} min ${delay > 0 ? "late" : "early"})`
+											: " (live)"
+										: ""}{" "}
+									· {leg.stops} stop{leg.stops === 1 ? "" : "s"} · get off at{" "}
+									<strong>{leg.toStop}</strong> at {time.format(leg.arriveAt)}
+								</small>
+							</span>
+						</li>
+					</Fragment>
+				);
+			})}
+			<li className="step-walk">
+				<Footprints size={14} />
+				<span>
+					Walk {metres(legs[legs.length - 1].walkFromMetres)} to your
+					destination
+				</span>
+			</li>
+		</ol>
 	);
 }

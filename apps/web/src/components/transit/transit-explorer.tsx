@@ -153,23 +153,23 @@ export default function TransitExplorer() {
 	const [editingProfile, setEditingProfile] = useState(false);
 	const [guestChosen, setGuestChosen] = useState(false);
 	const [planPath, setPlanPath] = useState<PlanPath | null>(null);
-	// While following a chosen trip, the map shows only that trip: your bus and its two stops.
+	// While following a chosen trip, the map shows only that trip: your buses and their stops.
 	const tripFocus = planOpen && planStage === "map" && !!planPath;
 	const tripVehicles = useMemo(() => {
-		const ride = planPath?.ride;
-		if (!tripFocus || !ride) return EMPTY_VEHICLES;
-		const own = live.data?.vehicles.filter((v) => v.tripId === ride.tripId);
-		// Before your bus starts its trip, show the route's buses so you can see it coming.
-		return own?.length
-			? own
-			: (live.data?.vehicles.filter((v) => v.routeId === ride.routeId) ??
-					EMPTY_VEHICLES);
+		const rides = planPath?.rides;
+		if (!tripFocus || !rides?.length) return EMPTY_VEHICLES;
+		const all = live.data?.vehicles ?? EMPTY_VEHICLES;
+		// Your exact bus if it's running; otherwise that route's buses, so you can see one coming.
+		return rides.flatMap((ride) => {
+			const own = all.filter((v) => v.tripId === ride.tripId);
+			return own.length ? own : all.filter((v) => v.routeId === ride.routeId);
+		});
 	}, [tripFocus, planPath, live.data]);
 	const tripStops = useMemo(
 		() =>
-			tripFocus && planPath?.ride
+			tripFocus && planPath?.stopIds?.length
 				? (network.data?.stops ?? EMPTY_STOPS).filter((s) =>
-						planPath.ride?.stopIds.includes(s.id),
+						planPath.stopIds?.includes(s.id),
 					)
 				: EMPTY_STOPS,
 		[tripFocus, planPath, network.data],

@@ -11,7 +11,7 @@ import {
 import { sliceShape } from "./paths";
 import { DEFAULT_PROFILE, type Profile, persona } from "./profile";
 import { quote } from "./providers";
-import { findRides, type Visit } from "./transit";
+import { findRides, findTransfers, type Visit } from "./transit";
 
 const START = Date.parse("2026-10-09T21:00:00Z"); // Vilnius midnight, 10 Oct
 const NOW = START + 12 * 3600_000; // 12:00
@@ -302,4 +302,49 @@ test("no green nudge when no green option suits the rider", () => {
 	);
 	assert.equal(best(ranked)?.mode, "taxi");
 	assert.equal(best(ranked)?.promoted, undefined);
+});
+
+test("one-change trips name both buses, the change stop and a realistic connection", () => {
+	const h = 12 * 3600;
+	const visits: Visit[] = [
+		// Route 10: A → X → Y
+		visit("t10", "A", h + 300, 1),
+		visit("t10", "X", h + 900, 2),
+		visit("t10", "Y", h + 1500, 3),
+		// Route 53 from X' (across the street from X) to D; one leaves too soon to catch.
+		visit("t53early", "X2", h + 960, 1),
+		visit("t53early", "D", h + 1500, 2),
+		visit("t53", "X2", h + 1200, 1),
+		visit("t53", "D", h + 1800, 2),
+	];
+	const trips = findTransfers({
+		now: NOW,
+		origins: new Map([["A", 100]]),
+		destinations: new Map([["D", 150]]),
+		departures: (s) => visits.filter((v) => v.stopId === s),
+		tripVisits: (t) => visits.filter((v) => v.tripId === t),
+		serviceStarts: () => [START],
+		routeOf: (t) => ({ t10: "r10", t53early: "r53", t53: "r53" })[t],
+		delayOf: () => null,
+		walkMinutes: (m) => Math.ceil(m / 75),
+		nearbyStops: (s) =>
+			s === "X"
+				? new Map([
+						["X", 0],
+						["X2", 60],
+					])
+				: new Map([[s, 0]]),
+	});
+	assert.equal(trips.length, 1);
+	const [first, second] = trips[0].legs;
+	assert.deepEqual(
+		[first.routeId, first.fromStopId, first.toStopId],
+		["r10", "A", "X"],
+	);
+	// The 12:16 bus leaves 1 min after arrival — too tight — so we take the 12:20 one.
+	assert.deepEqual(
+		[second.routeId, second.tripId, second.fromStopId, second.toStopId],
+		["r53", "t53", "X2", "D"],
+	);
+	assert.equal(second.walkToMetres, 60);
 });

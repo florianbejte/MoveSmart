@@ -1,5 +1,10 @@
 import { strFromU8, unzipSync } from "fflate";
-import { findRides } from "../plan/transit";
+import {
+	findRides,
+	findTransfers,
+	type RideSearch,
+	type TransitRide,
+} from "../plan/transit";
 import {
 	activeService,
 	distance,
@@ -377,6 +382,34 @@ export async function getStopRoutes(id: string) {
 	return { stopId: id, trips, stale: data.network.stale };
 }
 /** Direct rides between two points in the next 90 minutes, using live delays where vehicles report them. */
+const changeIndex = new WeakMap<Schedule, Map<string, Map<string, number>>>();
+/** For each stop, the stops within a 250 m walk (itself included), for changing buses. */
+function changeStops(data: Schedule) {
+	let index = changeIndex.get(data);
+	if (index) return index;
+	index = new Map();
+	const cell = (lat: number, lon: number) =>
+		`${Math.floor(lat / 0.003)}:${Math.floor(lon / 0.005)}`;
+	const grid = new Map<string, Stop[]>();
+	for (const s of data.network.stops) {
+		const key = cell(s.lat, s.lon);
+		grid.set(key, [...(grid.get(key) ?? []), s]);
+	}
+	for (const s of data.network.stops) {
+		const near = new Map<string, number>([[s.id, 0]]);
+		const [la, lo] = [Math.floor(s.lat / 0.003), Math.floor(s.lon / 0.005)];
+		for (let i = -1; i <= 1; i++)
+			for (let j = -1; j <= 1; j++)
+				for (const other of grid.get(`${la + i}:${lo + j}`) ?? []) {
+					if (other.id === s.id) continue;
+					const d = distance(s, other);
+					if (d <= 250) near.set(other.id, d);
+				}
+		index.set(s.id, near);
+	}
+	changeIndex.set(data, index);
+	return index;
+}
 export async function getRides(from: Position, to: Position, walkPace = 75) {
 	const [data, feed] = await Promise.all([
 		getSchedule(),
@@ -401,7 +434,7 @@ export async function getRides(from: Position, to: Position, walkPace = 75) {
 		date,
 		start: serviceStart(date),
 	}));
-	const rides = findRides({
+	const query: RideSearch = {
 		now,
 		origins: near(from, 700),
 		destinations: near(to, 700),
@@ -430,18 +463,26 @@ export async function getRides(from: Position, to: Position, walkPace = 75) {
 			const delay = running ? vehicles.get(tripId)?.delay : undefined;
 			return delay ?? null;
 		},
-		walkMinutes: (m) => Math.max(1, Math.round((m * 1.25) / walkPace)),
+		walkMinutes: (m: number) => Math.max(1, Math.round((m * 1.25) / walkPace)),
+	};
+	const rides = findRides(query);
+	const transfers = findTransfers({
+		...query,
+		nearbyStops: (stopId) =>
+			changeStops(data).get(stopId) ?? new Map([[stopId, 0]]),
+	});
+	const named = (r: TransitRide) => ({
+		...r,
+		fromStop: data.stops.get(r.fromStopId)?.name ?? r.fromStopId,
+		toStop: data.stops.get(r.toStopId)?.name ?? r.toStopId,
+		destination:
+			data.trips.get(r.tripId)?.trip_headsign ||
+			data.trips.get(r.tripId)?.direction_name ||
+			"",
 	});
 	return {
-		rides: rides.map((r) => ({
-			...r,
-			fromStop: data.stops.get(r.fromStopId)?.name ?? r.fromStopId,
-			toStop: data.stops.get(r.toStopId)?.name ?? r.toStopId,
-			destination:
-				data.trips.get(r.tripId)?.trip_headsign ||
-				data.trips.get(r.tripId)?.direction_name ||
-				"",
-		})),
+		rides: rides.map(named),
+		transfers: transfers.map((t) => ({ legs: t.legs.map(named) })),
 		generatedAt: now,
 		stale: data.network.stale || !feed || feed.stale,
 	};

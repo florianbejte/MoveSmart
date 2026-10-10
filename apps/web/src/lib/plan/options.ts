@@ -2,7 +2,7 @@ import { distance } from "../transit/core";
 import type { Position } from "../transit/types";
 import { type Profile, stepFree, walkPace } from "./profile";
 import { type Quote, quote } from "./providers";
-import type { TransitRide } from "./transit";
+import type { TransferTrip, TransitRide } from "./transit";
 
 export type Mode =
 	| "walk"
@@ -32,6 +32,8 @@ export type TripOption = {
 	arriveAt: number;
 	estimated: boolean;
 	ride?: TransitRide;
+	/** Every bus of a public transport trip in order: one for a direct ride, two with a change. */
+	legs?: TransitRide[];
 	/** Taxi and car-sharing providers, best first for this rider. */
 	quotes?: Quote[];
 	notes: string[];
@@ -118,6 +120,7 @@ export function estimateOptions(input: {
 	to: Position;
 	now: number;
 	rides: TransitRide[];
+	transfers?: TransferTrip[];
 	routeName: (routeId: string) => string;
 	profile: Profile;
 }): TripOption[] {
@@ -202,6 +205,7 @@ export function estimateOptions(input: {
 				co2: Math.round((rideMin / 60) * 18 * BUS_CO2_KM),
 				estimated: false,
 				ride,
+				legs: [ride],
 				notes: ride.live
 					? [
 							Math.abs(ride.delaySeconds ?? 0) < 60
@@ -213,7 +217,45 @@ export function estimateOptions(input: {
 			departAt: ride.departAt - walkMin(ride.walkToMetres) * 60_000,
 		});
 	}
-	if (!input.rides.length && straight > 800)
+	for (const { legs } of input.transfers ?? []) {
+		const [first, second] = legs;
+		const walk =
+			walkMin(first.walkToMetres) +
+			(second.walkToMetres > 0 ? walkMin(second.walkToMetres) : 0) +
+			walkMin(second.walkFromMetres);
+		const startWait = Math.max(
+			0,
+			minutes(first.departAt - now) - walkMin(first.walkToMetres),
+		);
+		const changeWait = Math.max(
+			0,
+			minutes(second.departAt - first.arriveAt) -
+				(second.walkToMetres > 0 ? walkMin(second.walkToMetres) : 0),
+		);
+		const rideMin =
+			minutes(first.arriveAt - first.departAt) +
+			minutes(second.arriveAt - second.departAt);
+		const total = walk + startWait + changeWait + rideMin;
+		const live = legs.find((l) => l.live);
+		options.push({
+			...option({
+				id: `transit-${first.tripId}-${second.tripId}`,
+				mode: "transit",
+				label: `Route ${input.routeName(first.routeId)} + ${input.routeName(second.routeId)}`,
+				parts: { walk, wait: startWait + changeWait, ride: rideMin, park: 0 },
+				cost: profile.hasPass ? 0 : total > 30 ? TICKET_60 : TICKET_30,
+				co2: Math.round((rideMin / 60) * 18 * BUS_CO2_KM),
+				estimated: false,
+				ride: first,
+				legs,
+				notes: [
+					live ? "One change · live times" : "One change · timetable times",
+				],
+			}),
+			departAt: first.departAt - walkMin(first.walkToMetres) * 60_000,
+		});
+	}
+	if (!input.rides.length && !input.transfers?.length && straight > 800)
 		options.push(
 			option({
 				id: "transit-estimate",
@@ -344,7 +386,7 @@ export function rankOptions(
 			(o.co2 / 1000) * perKg;
 		if (o.estimated) score += p.has("certainty") ? 8 : 3;
 		if (o.ride?.live && p.has("certainty")) score -= 2;
-		if (o.mode === "transit" && o.label.includes("change"))
+		if (o.mode === "transit" && (o.estimated || (o.legs?.length ?? 1) > 1))
 			score += (p.has("comfort") ? 6 : 3) * (stepFree(profile) ? 2 : 1);
 		if ((o.mode === "bike" || o.mode === "scooter") && p.has("comfort"))
 			score += 4;
