@@ -125,7 +125,6 @@ type PlanResponse = {
 	rides: NamedRide[];
 	transfers?: { legs: [NamedRide, NamedRide] }[];
 	disruptions?: Disruption[];
-	weather: Weather | null;
 	stale: boolean;
 	walkingApproximate?: boolean;
 	generatedAt: number;
@@ -233,17 +232,20 @@ export function TripPlanner({
 		lat: Math.round(start.lat * 2000) / 2000,
 		lon: Math.round(start.lon * 2000) / 2000,
 	};
-	const plan = useTransit<PlanResponse>(
+	const planUrl =
 		to && !hidden
 			? `/api/plan?from=${from.lat},${from.lon}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}&pace=${walkPace(profile)}&walk=${maxWalk}`
-			: null,
-		60_000,
-	);
+			: null;
+	const plan = useTransit<PlanResponse>(planUrl, 60_000);
+	const conditions = useTransit<{
+		weather: Weather | null;
+		disruptions: Disruption[];
+	}>(planUrl ? `${planUrl}&part=conditions` : null, 60_000);
 	const routeName = (id: string) => routes.get(id)?.name ?? "";
 	// Official closures and incidents plus rider reports (protests, crowds, blocked roads).
 	const disruptions = useMemo(
-		() => [...(plan.data?.disruptions ?? []), ...account.areaReports],
-		[plan.data, account.areaReports],
+		() => [...(conditions.data?.disruptions ?? []), ...account.areaReports],
+		[conditions.data, account.areaReports],
 	);
 	const { ranked, impact } = useMemo(() => {
 		if (!to || !plan.data) return { ranked: [], impact: null };
@@ -275,10 +277,19 @@ export function TripPlanner({
 				};
 		}
 		return {
-			ranked: rankOptions(options, profile, plan.data.weather),
+			ranked: rankOptions(options, profile, conditions.data?.weather ?? null),
 			impact,
 		};
-	}, [to, plan.data, profile, start, routes, disruptions, stops]);
+	}, [
+		to,
+		plan.data,
+		conditions.data,
+		profile,
+		start,
+		routes,
+		disruptions,
+		stops,
+	]);
 	const usable = ranked.filter((o) => !o.excluded);
 	const filteredOptions = usable.filter(
 		(o) =>
@@ -300,7 +311,7 @@ export function TripPlanner({
 	])
 		named.set(legKey(r), r);
 	const excluded = ranked.filter((o) => o.excluded);
-	const weather = plan.data?.weather ?? null;
+	const weather = conditions.data?.weather ?? null;
 	const weights = weightsFor(profile, weather);
 
 	const tooClose = to && distance(start, to) < 150;
@@ -446,7 +457,7 @@ export function TripPlanner({
 								autoFocus
 								value={fromQuery}
 								onChange={(e) => setFromQuery(e.target.value)}
-								placeholder={t("From? Address, place or stop")}
+								placeholder={t("Start point")}
 								aria-label={t("Start point")}
 							/>
 						</label>
@@ -459,7 +470,7 @@ export function TripPlanner({
 						>
 							<small>{t("From")}</small>
 							{fromPlace?.name ??
-								(usingLocation ? "My location" : "City centre · tap to change")}
+								t(usingLocation ? "My location" : "City centre")}
 						</button>
 					)}
 					{editingFrom ? (
@@ -521,7 +532,7 @@ export function TripPlanner({
 							<input
 								value={query}
 								onChange={(e) => setQuery(e.target.value)}
-								placeholder={t("Where to? Address, place or stop")}
+								placeholder={t("Where to?")}
 								aria-label={t("Destination")}
 							/>
 						</label>
@@ -530,7 +541,7 @@ export function TripPlanner({
 			</div>
 			<details className="journey-settings">
 				<summary>
-					{t("Trip options")}
+					{t("Options")}
 					{t(" ")}
 					<span>
 						{t("Up to ")}
@@ -605,6 +616,7 @@ export function TripPlanner({
 					<button
 						key={id}
 						type="button"
+						aria-label={t(label)}
 						aria-pressed={travelMode === id}
 						onClick={() => {
 							setTravelMode(id);
@@ -613,7 +625,11 @@ export function TripPlanner({
 						}}
 					>
 						<ModeIcon size={17} />
-						{t(label)}
+						<span>
+							{t(
+								id === "transit" ? "Buses" : id === "drive" ? "By car" : label,
+							)}
+						</span>
 					</button>
 				))}
 			</fieldset>
@@ -656,9 +672,7 @@ export function TripPlanner({
 					)}
 					<Suggestions search={toSearch} onChoose={choose} />
 					<p className="helper-text">
-						{t(
-							"We compare walking, bikes, scooters, live buses, driving and taxis — and rank them for you.",
-						)}
+						{t("Choose a destination to compare your best routes.")}
 					</p>
 				</div>
 			)}
@@ -678,6 +692,15 @@ export function TripPlanner({
 			)}
 			{to && !tooClose && plan.data && (
 				<>
+					{!conditions.data && (
+						<p className="helper-text" role="status">
+							{t(
+								conditions.error
+									? "Conditions unavailable. Routes use timetable and live vehicle data."
+									: "Routes ready. Checking weather and disruptions…",
+							)}
+						</p>
+					)}
 					{impact && <TripAdvice impact={impact} />}
 					{!selected && (
 						<TripConditions
@@ -1546,15 +1569,11 @@ function Suggestions({
 				</button>
 			))}
 			{search.searching && (
-				<p className="loading-text">
-					{t("Searching addresses and places…")}
-				</p>
+				<p className="loading-text">{t("Searching addresses and places…")}</p>
 			)}
 			{search.error && (
 				<p className="helper-text">
-					{t(
-						" Address search is unavailable right now — stops still work. ",
-					)}
+					{t(" Address search is unavailable right now — stops still work. ")}
 				</p>
 			)}
 			{search.stops.map((s) => (

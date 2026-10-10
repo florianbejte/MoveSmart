@@ -1498,6 +1498,7 @@
 	color: var(--slate);
 }
 .plan-search {
+	min-width: 0;
 	flex: 1;
 	display: flex;
 	align-items: center;
@@ -2399,7 +2400,8 @@
 	font-size: 11px;
 }
 .journey-modes {
-	display: flex;
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 5px;
 	margin: 14px 0 22px;
 	padding: 4px;
@@ -3376,4 +3378,17 @@
 }
 .plan-search input::placeholder {
 	color: #9a9caa;
+}
+
+/* Compact labels stay legible in both Lithuanian and English on narrow phones. */
+.journey-modes button { padding: 8px 2px; min-height: 58px; line-height: 1.25; }
+.journey-modes button span { white-space: nowrap; }
+.plan-point > button:not(.point-edit) { flex-shrink: 0; }
+.plan-search svg { flex-shrink: 0; }
+.journey-settings summary > span { white-space: nowrap; }
+@media (max-width: 380px) {
+ .journey-modes { gap: 2px; padding: 3px; }
+ .journey-modes button { font-size: 10px; }
+ .journey-settings summary { gap: 8px; font-size: 11px; }
+ .transit-app[data-view="plan"] .explorer-heading h1 { font-size: 23px; line-height: 1.2; }
 }

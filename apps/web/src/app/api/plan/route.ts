@@ -22,15 +22,24 @@ export async function GET(request: Request) {
 			{ status: 400 },
 		);
 	try {
-		const [transit, weather, disruptions] = await Promise.all([
-			getRides(from, to, Math.min(90, Math.max(40, pace)), maxWalk),
-			getWeather(),
-			officialDisruptions(from, to).catch(() => []),
-		]);
-		return Response.json(
-			{ ...transit, weather, disruptions },
-			{ headers: { "Cache-Control": "no-store" } },
+		// Conditions load independently so a slow ArcGIS feed cannot hold up routes.
+		if (params.get("part") === "conditions") {
+			const [weather, disruptions] = await Promise.all([
+				getWeather(),
+				officialDisruptions(from, to).catch(() => []),
+			]);
+			return Response.json(
+				{ weather, disruptions },
+				{ headers: { "Cache-Control": "no-store" } },
+			);
+		}
+		const transit = await getRides(
+			from,
+			to,
+			Math.min(90, Math.max(40, pace)),
+			maxWalk,
 		);
+		return Response.json(transit, { headers: { "Cache-Control": "no-store" } });
 	} catch (error) {
 		console.error(
 			"Trip planning unavailable",

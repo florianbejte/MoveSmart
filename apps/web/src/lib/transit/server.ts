@@ -447,6 +447,38 @@ export async function getRides(
 			start: serviceStart(date),
 		}),
 	);
+	// Resolve calendar and live-delay metadata once per query, not once per stop/transfer.
+	const startsByService = new Map<string, number[]>();
+	const startsByTrip = new Map<string, number[]>();
+	const delaysByTrip = new Map<string, Map<number, number | null>>();
+	for (const [id, trip] of data.trips) {
+		let starts = startsByService.get(trip.service_id);
+		if (!starts) {
+			starts = days
+				.filter(({ date }) =>
+					activeService(
+						data.calendar.get(trip.service_id),
+						data.exceptions.get(`${trip.service_id}:${date}`),
+						date,
+					),
+				)
+				.map((day) => day.start);
+			startsByService.set(trip.service_id, starts);
+		}
+		startsByTrip.set(id, starts);
+		const times = data.tripStops.get(id) ?? [];
+		delaysByTrip.set(
+			id,
+			new Map(
+				starts.map((start) => {
+					const running =
+						now >= start + (times[0]?.time ?? 0) * 1000 - 30 * 60_000 &&
+						now <= start + (times.at(-1)?.time ?? 0) * 1000 + 2 * 3600_000;
+					return [start, running ? (vehicles.get(id)?.delay ?? null) : null];
+				}),
+			),
+		);
+	}
 	const query: RideSearch = {
 		now,
 		origins: access.distances,
@@ -455,28 +487,8 @@ export async function getRides(
 		departures: (stopId) => data.stopTimes.get(stopId) ?? [],
 		tripVisits: (tripId) => data.tripStops.get(tripId) ?? [],
 		routeOf: (tripId) => data.trips.get(tripId)?.route_id,
-		serviceStarts: (tripId) => {
-			const trip = data.trips.get(tripId);
-			if (!trip) return [];
-			return days
-				.filter(({ date }) =>
-					activeService(
-						data.calendar.get(trip.service_id),
-						data.exceptions.get(`${trip.service_id}:${date}`),
-						date,
-					),
-				)
-				.map((d) => d.start);
-		},
-		delayOf: (tripId, start) => {
-			const times = data.tripStops.get(tripId) ?? [];
-			// Live delay applies only to the service instance that is running now.
-			const running =
-				now >= start + (times[0]?.time ?? 0) * 1000 - 30 * 60_000 &&
-				now <= start + (times.at(-1)?.time ?? 0) * 1000 + 2 * 3600_000;
-			const delay = running ? vehicles.get(tripId)?.delay : undefined;
-			return delay ?? null;
-		},
+		serviceStarts: (tripId) => startsByTrip.get(tripId) ?? [],
+		delayOf: (tripId, start) => delaysByTrip.get(tripId)?.get(start) ?? null,
 		walkMinutes: (m: number) => Math.ceil(m / walkPace),
 	};
 	const rides = findRides(query);

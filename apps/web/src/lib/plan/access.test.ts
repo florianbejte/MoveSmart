@@ -150,3 +150,32 @@ test("no invented bus itinerary when no timetable journey was found", () => {
 		false,
 	);
 });
+
+test("failed walking lookups are briefly cached as approximate, then retried", async () => {
+	const originalNow = Date.now;
+	let now = originalNow();
+	Date.now = () => now;
+	let calls = 0;
+	const origin = { lat: 54.7351, lon: 25.3121 };
+	const stops = [{ id: "retry-stop", lat: 54.7361, lon: 25.3121 }];
+	const request = (async () => {
+		calls++;
+		if (calls === 1) throw new Error("rate limited");
+		return Response.json({ code: "Ok", distances: [[null]] });
+	}) as typeof fetch;
+	try {
+		const first = await walkingAccess(origin, stops, 75, 20, false, request);
+		const repeat = await walkingAccess(origin, stops, 75, 20, false, request);
+		assert.equal(calls, 1);
+		assert.equal(first.approximate, true);
+		assert.equal(repeat.approximate, true);
+		assert.deepEqual(repeat.distances, first.distances);
+		now += 31_000;
+		const retried = await walkingAccess(origin, stops, 75, 20, false, request);
+		assert.equal(calls, 2);
+		assert.equal(retried.approximate, false);
+		assert.equal(retried.distances.has("retry-stop"), false);
+	} finally {
+		Date.now = originalNow;
+	}
+});

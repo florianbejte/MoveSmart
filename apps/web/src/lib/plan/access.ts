@@ -3,26 +3,59 @@ import type { Position } from "../transit/types";
 
 type StopPoint = Position & { id: string };
 type Access = { distances: Map<string, number>; approximate: boolean };
-const cache = new Map<string, { metres: number | null; expires: number }>();
+const cache = new Map<
+	string,
+	{ metres: number | null; expires: number; approximate?: boolean }
+>();
 
 // Share a single request queue between access and egress to avoid bursting the public service.
 let queue: Promise<void> = Promise.resolve();
 let lastRequest = 0;
-const matrixRequest: typeof fetch = async (url) => {
+let unavailableUntil = 0;
+const pending = new Map<string, Promise<Response>>();
+const matrixRequest: typeof fetch = async (url, options) => {
+	const key = String(url);
+	const existing = pending.get(key);
+	if (existing) return (await existing).clone();
 	const result = queue.then(async () => {
+		options?.signal?.throwIfAborted();
+		if (Date.now() < unavailableUntil)
+			throw new Error("Walking service cooling down");
 		const delay = Math.max(0, 1100 - (Date.now() - lastRequest));
 		if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+		options?.signal?.throwIfAborted();
 		lastRequest = Date.now();
-		return fetch(url, {
-			headers: { "User-Agent": "MoveSmart/1.0" },
-			signal: AbortSignal.timeout(8000),
-		});
+		try {
+			const response = await fetch(url, {
+				headers: { "User-Agent": "MoveSmart/1.0" },
+				signal: AbortSignal.any([
+					AbortSignal.timeout(2500),
+					...(options?.signal ? [options.signal] : []),
+				]),
+			});
+			// Consume before releasing the queue: spacing applies to the entire request.
+			const body = await response.text();
+			if (!response.ok)
+				throw new Error(`Walking service HTTP ${response.status}`);
+			return new Response(body, {
+				status: response.status,
+				headers: response.headers,
+			});
+		} catch (error) {
+			unavailableUntil = Date.now() + 30_000;
+			throw error;
+		}
 	});
+	pending.set(key, result);
 	queue = result.then(
 		() => undefined,
 		() => undefined,
 	);
-	return result;
+	try {
+		return (await result).clone();
+	} finally {
+		pending.delete(key);
+	}
 };
 
 /** All stops within the walking budget; the straight-line check is only a lower bound.
@@ -36,6 +69,7 @@ export async function walkingAccess(
 	reverse = false,
 	request: typeof fetch = matrixRequest,
 ): Promise<Access> {
+	const budget = AbortSignal.timeout(5000);
 	const candidates = stops.filter((s) => distance(point, s) <= pace * limit);
 	const distances = new Map<string, number>();
 	let approximate = false;
@@ -45,6 +79,7 @@ export async function walkingAccess(
 	for (const s of candidates) {
 		const hit = cache.get(key(s));
 		if (hit && hit.expires > Date.now()) {
+			approximate ||= !!hit.approximate;
 			if (hit.metres !== null && hit.metres <= pace * limit)
 				distances.set(s.id, hit.metres);
 		} else missing.push(s);
@@ -55,11 +90,12 @@ export async function walkingAccess(
 		const points = [point, ...batch].map((p) => `${p.lon},${p.lat}`).join(";");
 		const indices = batch.map((_, i) => i + 1).join(";");
 		try {
+			budget.throwIfAborted();
 			const response = await request(
 				`https://routing.openstreetmap.de/routed-foot/table/v1/driving/${points}?sources=${reverse ? indices : "0"}&destinations=${reverse ? "0" : indices}&annotations=distance`,
 				{
 					headers: { "User-Agent": "MoveSmart/1.0" },
-					signal: AbortSignal.timeout(5000),
+					signal: budget,
 				},
 			);
 			const data = (await response.json()) as {
@@ -91,6 +127,11 @@ export async function walkingAccess(
 			approximate = true;
 			for (const s of batch) {
 				const metres = distance(point, s) * 1.3;
+				cache.set(key(s), {
+					metres,
+					expires: Date.now() + 30_000,
+					approximate: true,
+				});
 				if (metres <= pace * limit) distances.set(s.id, metres);
 			}
 		}

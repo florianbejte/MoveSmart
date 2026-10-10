@@ -1,5 +1,17 @@
 export const lithuanian: Record<string, string> = {
-"Start from my location": "Pradėti nuo mano vietos",
+	"City centre": "Miesto centras",
+	"Where to?": "Kur vyksite?",
+	Options: "Nuostatos",
+	"By car": "Auto",
+	"Choose a destination to compare your best routes.":
+		"Pasirinkite tikslą – palyginsime geriausius maršrutus.",
+
+	"Conditions unavailable. Routes use timetable and live vehicle data.":
+		"Sąlygų duomenys nepasiekiami. Maršrutai pagrįsti tvarkaraščiais ir transporto duomenimis realiuoju laiku.",
+	"Routes ready. Checking weather and disruptions…":
+		"Maršrutai paruošti. Tikrinami orai ir trikdžiai…",
+
+	"Start from my location": "Pradėti nuo mano vietos",
 	"Your personal route formula": "Jūsų asmeninė maršruto formulė",
 	ride: "važiavimas",
 	walk: "ėjimas",
@@ -366,7 +378,7 @@ export const lithuanian: Record<string, string> = {
 	"Less than 1": "Mažiau nei 1",
 	"Less walking and waiting": "Mažiau ėjimo ir laukimo",
 	"Less walking, no bikes": "Mažiau ėjimo, be dviračių",
-	"Let’s get there.": "Suplanuokite kelionę.",
+	"Let’s get there.": "Kur keliausime?",
 	Light: "Šviesi",
 	Lithuania: "Lietuva",
 	"Little room to move or board.": "Mažai vietos judėti ar įlipti.",
