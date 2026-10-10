@@ -21,6 +21,7 @@ import {
 } from "@/lib/transit/city";
 import { cityPopupContent } from "./city-popup";
 import { mapSymbolImage } from "./map-symbol";
+import type { PlanPath } from "./trip-planner";
 import { vehiclePopupContent } from "./vehicle-popup";
 
 type Props = {
@@ -40,7 +41,9 @@ type Props = {
 	onVehicle: (id: string) => void;
 	onStop: (id: string) => void;
 	onCenter: (position: Position) => void;
+	plan: PlanPath | null;
 };
+const EMPTY_PLAN = { type: "FeatureCollection" as const, features: [] };
 export default function TransitMap(props: Props) {
 	const container = useRef<HTMLElement>(null);
 	const map = useRef<maplibregl.Map | null>(null);
@@ -316,6 +319,57 @@ export default function TransitMap(props: Props) {
 					"line-opacity": 0.85,
 				},
 			});
+			// The planned trip: walking legs dashed, rides solid, with start and end markers.
+			instance.addSource("plan", { type: "geojson", data: EMPTY_PLAN });
+			instance.addLayer({
+				id: "plan-outline",
+				type: "line",
+				source: "plan",
+				layout: { "line-cap": "round", "line-join": "round" },
+				paint: {
+					"line-color": "#ffffff",
+					"line-width": ["match", ["get", "kind"], "walk", 7, 10],
+				},
+				filter: ["==", ["geometry-type"], "LineString"],
+			});
+			instance.addLayer({
+				id: "plan-ride",
+				type: "line",
+				source: "plan",
+				layout: { "line-cap": "round", "line-join": "round" },
+				paint: { "line-color": ["get", "color"], "line-width": 6 },
+				filter: ["==", ["get", "kind"], "ride"],
+			});
+			instance.addLayer({
+				id: "plan-walk",
+				type: "line",
+				source: "plan",
+				layout: { "line-cap": "round", "line-join": "round" },
+				paint: {
+					"line-color": ["get", "color"],
+					"line-width": 4,
+					"line-dasharray": [0.1, 2],
+				},
+				filter: ["==", ["get", "kind"], "walk"],
+			});
+			instance.addLayer({
+				id: "plan-ends",
+				type: "circle",
+				source: "plan",
+				filter: ["==", ["geometry-type"], "Point"],
+				paint: {
+					"circle-radius": 8,
+					"circle-color": ["match", ["get", "end"], "to", "#ed1c24", "#ffffff"],
+					"circle-stroke-color": [
+						"match",
+						["get", "end"],
+						"to",
+						"#ffffff",
+						"#414454",
+					],
+					"circle-stroke-width": 3,
+				},
+			});
 			instance.addSource("stops", {
 				type: "geojson",
 				data: { type: "FeatureCollection", features: [] },
@@ -556,6 +610,54 @@ export default function TransitMap(props: Props) {
 		}
 		userMarker.current.setLngLat([props.location.lon, props.location.lat]);
 	}, [ready, props.location]);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the key changes whenever the drawn path does.
+	useEffect(() => {
+		if (!ready || !map.current) return;
+		const plan = props.plan;
+		(map.current.getSource("plan") as maplibregl.GeoJSONSource)?.setData(
+			plan
+				? {
+						type: "FeatureCollection",
+						features: [
+							...plan.segments
+								.filter((s) => s.coordinates.length > 1)
+								.map((s) => ({
+									type: "Feature" as const,
+									properties: { kind: s.kind, color: s.color },
+									geometry: {
+										type: "LineString" as const,
+										coordinates: s.coordinates,
+									},
+								})),
+							...(["from", "to"] as const).map((end) => ({
+								type: "Feature" as const,
+								properties: { end },
+								geometry: {
+									type: "Point" as const,
+									coordinates: [plan[end].lon, plan[end].lat],
+								},
+							})),
+						],
+					}
+				: EMPTY_PLAN,
+		);
+		if (!plan) return;
+		const bounds = new maplibregl.LngLatBounds();
+		for (const s of plan.segments)
+			for (const c of s.coordinates) bounds.extend(c);
+		bounds.extend([plan.from.lon, plan.from.lat]);
+		bounds.extend([plan.to.lon, plan.to.lat]);
+		const wide = window.matchMedia("(min-width: 900px)").matches;
+		map.current.fitBounds(bounds, {
+			padding: wide
+				? { top: 90, bottom: 90, left: 420, right: 80 }
+				: { top: 70, bottom: 40, left: 40, right: 70 },
+			maxZoom: 16,
+			duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+				? 0
+				: 800,
+		});
+	}, [ready, props.plan?.key, props.plan?.segments]);
 	useEffect(() => {
 		if (ready && props.focus)
 			map.current?.flyTo({

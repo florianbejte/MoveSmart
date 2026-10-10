@@ -15,12 +15,14 @@ import {
 	Navigation,
 	Radio,
 	RefreshCw,
+	Route,
 	Search,
 	SlidersHorizontal,
 	X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_PROFILE } from "@/lib/plan/profile";
 import { distance, freshVehicle } from "@/lib/transit/core";
 import { SERVICE_COLORS, serviceColor } from "@/lib/transit/service-colors";
 import type {
@@ -33,9 +35,13 @@ import type {
 	TripDetail,
 	Vehicle,
 } from "@/lib/transit/types";
+import { useAccount } from "../account";
 import { CityLayers, useCityLayers } from "./city-layers";
 import { MapSymbol } from "./map-symbol";
+import { Onboarding } from "./onboarding";
+import { type PlanPath, TripPlanner } from "./trip-planner";
 import { useTransit } from "./use-transit";
+import { Welcome } from "./welcome";
 import "./transit.css";
 
 const TransitMap = dynamic(() => import("./transit-map"), {
@@ -113,6 +119,29 @@ export default function TransitExplorer() {
 	const [now, setNow] = useState(Date.now());
 	const city = useCityLayers(now);
 	const [cityOpen, setCityOpen] = useState(false);
+	const [planOpen, setPlanOpen] = useState(false);
+	const account = useAccount();
+	const profile = account.profile;
+	const [editingProfile, setEditingProfile] = useState(false);
+	const [guestChosen, setGuestChosen] = useState(false);
+	const [planPath, setPlanPath] = useState<PlanPath | null>(null);
+	useEffect(() => {
+		try {
+			setGuestChosen(sessionStorage.getItem("movesmart-guest") === "1");
+		} catch {}
+	}, []);
+	// Signed-out visitors see the welcome screen; anyone without a profile does the questionnaire.
+	const welcome = account.enabled && account.status === "guest" && !guestChosen;
+	const onboarding =
+		editingProfile ||
+		(!welcome && account.status !== "loading" && profile === null);
+	// Returning users with a profile land straight on "where to?".
+	const landed = useRef(false);
+	useEffect(() => {
+		if (landed.current || !profile || account.status !== "signed-in") return;
+		landed.current = true;
+		setPlanOpen(true);
+	}, [profile, account.status]);
 	const [sheet, setSheet] = useState<"peek" | "half" | "full">("half");
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const sheetPointer = useRef<number | null>(null);
@@ -121,10 +150,19 @@ export default function TransitExplorer() {
 		setSelection(null);
 		setPreviewTrip(null);
 		setCityOpen(false);
+		setPlanOpen(false);
 		setSheet("half");
+	}
+	function openPlan() {
+		setPlanOpen(true);
+		setCityOpen(false);
+		setSelection(null);
+		setSheet(sheet === "peek" ? "half" : sheet);
+		panelContent.current?.scrollTo({ top: 0 });
 	}
 	function openLayers() {
 		setCityOpen(true);
+		setPlanOpen(false);
 		setSheet("half");
 		panelContent.current?.scrollTo({ top: 0 });
 	}
@@ -285,8 +323,8 @@ export default function TransitExplorer() {
 		<main
 			className="transit-app"
 			data-sheet={sheet}
-			data-view={cityOpen ? "layers" : "nearby"}
-			data-detail={!!selection && !cityOpen}
+			data-view={planOpen ? "plan" : cityOpen ? "layers" : "nearby"}
+			data-detail={!!selection && !cityOpen && !planOpen}
 		>
 			<aside className="explorer-panel" aria-label="Transit explorer">
 				<button
@@ -328,11 +366,19 @@ export default function TransitExplorer() {
 				</button>
 				<div className="explorer-heading">
 					<div>
-						<h1>{cityOpen ? "A closer look." : "Find your ride."}</h1>
+						<h1>
+							{planOpen
+								? "Your best way."
+								: cityOpen
+									? "A closer look."
+									: "Find your ride."}
+						</h1>
 						<p>
-							{cityOpen
-								? "The city, layer by layer."
-								: "Vilnius is moving. Come along."}
+							{planOpen
+								? "Bus, bike, walk or car — ranked for you."
+								: cityOpen
+									? "The city, layer by layer."
+									: "Vilnius is moving. Come along."}
 						</p>
 					</div>
 					<button
@@ -393,18 +439,29 @@ export default function TransitExplorer() {
 					</button>
 				</label>
 				<nav className="panel-tabs" aria-label="Explore views">
-					<button type="button" aria-pressed={!cityOpen} onClick={openNearby}>
+					<button
+						type="button"
+						aria-pressed={!cityOpen && !planOpen}
+						onClick={openNearby}
+					>
 						<MapPin size={16} />
 						Nearby
 					</button>
+					<button type="button" aria-pressed={planOpen} onClick={openPlan}>
+						<Route size={16} />
+						Plan
+					</button>
 					<button type="button" aria-pressed={cityOpen} onClick={openLayers}>
 						<Layers2 size={16} />
-						City layers
+						Layers
 						<span className="layer-count">{city.enabled.length}</span>
 					</button>
 				</nav>
 				<div className="panel-content" ref={panelContent}>
-					<div className="explorer-filters" hidden={!filtersOpen || cityOpen}>
+					<div
+						className="explorer-filters"
+						hidden={!filtersOpen || cityOpen || planOpen}
+					>
 						<fieldset className="mode-tabs" aria-label="Transport type">
 							{(
 								[
@@ -533,7 +590,7 @@ export default function TransitExplorer() {
 					/>
 					<div
 						className="transit-results"
-						hidden={cityOpen}
+						hidden={cityOpen || planOpen}
 						key={selection?.id ?? "nearby"}
 					>
 						{selection && (
@@ -874,6 +931,22 @@ export default function TransitExplorer() {
 							</div>
 						)}
 					</div>
+					<TripPlanner
+						hidden={!planOpen}
+						stops={stops}
+						routes={routeById}
+						origin={origin}
+						usingLocation={!!location}
+						locating={locating}
+						onLocate={locate}
+						center={center}
+						profile={profile ?? DEFAULT_PROFILE}
+						places={account.places}
+						onPlace={account.rememberPlace}
+						onPath={setPlanPath}
+						onEditProfile={() => setEditingProfile(true)}
+						now={now}
+					/>
 				</div>
 				<footer className="panel-footer">
 					<span className={`status-dot ${feedStale ? "offline" : ""}`} />
@@ -929,6 +1002,7 @@ export default function TransitExplorer() {
 					onVehicle={selectVehicle}
 					onStop={selectStop}
 					onCenter={setCenter}
+					plan={planOpen ? planPath : null}
 				/>
 				<div className="map-topbar">
 					<div className="city-pill">
@@ -1012,11 +1086,19 @@ export default function TransitExplorer() {
 				</button>
 				<button
 					type="button"
-					aria-pressed={sheet !== "peek" && !cityOpen}
+					aria-pressed={sheet !== "peek" && !cityOpen && !planOpen}
 					onClick={openNearby}
 				>
 					<BusFront size={21} />
 					<span>Nearby</span>
+				</button>
+				<button
+					type="button"
+					aria-pressed={sheet !== "peek" && planOpen}
+					onClick={openPlan}
+				>
+					<Route size={21} />
+					<span>Plan</span>
 				</button>
 				<button
 					type="button"
@@ -1027,6 +1109,31 @@ export default function TransitExplorer() {
 					<span>Layers</span>
 				</button>
 			</nav>
+			{welcome && (
+				<Welcome
+					onGuest={() => {
+						try {
+							sessionStorage.setItem("movesmart-guest", "1");
+						} catch {}
+						setGuestChosen(true);
+					}}
+				/>
+			)}
+			{onboarding && (
+				<Onboarding
+					initial={profile ?? null}
+					onSkip={() => {
+						setEditingProfile(false);
+						// Skipping still counts as onboarded, with neutral defaults.
+						if (!profile) void account.saveProfile(DEFAULT_PROFILE);
+					}}
+					onDone={(next) => {
+						void account.saveProfile(next);
+						setEditingProfile(false);
+						openPlan();
+					}}
+				/>
+			)}
 		</main>
 	);
 }

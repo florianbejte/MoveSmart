@@ -1418,3 +1418,639 @@
 		gap: 6px 10px;
 	}
 }
+
+/* Trip planner: modes ranked for the rider's profile */
+.trip-planner {
+	padding-bottom: 12px;
+}
+.profile-chip {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	margin: 6px 0 12px;
+	padding: 10px 12px;
+	border: 0;
+	border-radius: 12px 12px 0 12px;
+	background: #f4f8e3;
+	color: var(--ink);
+	font-size: 12px;
+	text-align: left;
+}
+.profile-chip > svg:first-child {
+	color: #6c8a12;
+}
+.profile-chip span {
+	flex: 1;
+}
+.plan-points {
+	border: 1px solid #e0e0e0;
+	border-radius: 14px 14px 0 14px;
+	overflow: hidden;
+}
+.plan-point {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 52px;
+	padding: 0 6px 0 14px;
+}
+.plan-point + .plan-point {
+	border-top: 1px solid #e0e0e0;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.plan-point > button {
+	width: 40px;
+	height: 40px;
+	display: grid;
+	place-items: center;
+	border: 0;
+	border-radius: 10px 10px 0 10px;
+	background: var(--mist);
+	color: var(--ink);
+}
+.point-dot {
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	border: 3px solid var(--ink);
+}
+.point-dot.to {
+	border-color: var(--red);
+	background: var(--red);
+}
+.point-text {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	font-size: 14px;
+	font-weight: 700;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.point-text small {
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--slate);
+}
+.plan-search {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--slate);
+}
+.plan-search input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	outline: 0;
+	font-size: 16px;
+	background: none;
+	color: var(--ink);
+	min-height: 48px;
+}
+.plan-suggestions {
+	display: flex;
+	flex-direction: column;
+	margin-top: 8px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.plan-suggestions button {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 46px;
+	border: 0;
+	border-bottom: 1px solid #f0f0f0;
+	background: none;
+	text-align: left;
+	color: var(--ink);
+	font-size: 13px;
+	font-weight: 600;
+}
+.plan-suggestions button svg {
+	color: var(--red);
+	flex-shrink: 0;
+}
+.plan-options {
+	list-style: none;
+	padding: 0;
+	margin: 14px 0 0;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.plan-option {
+	position: relative;
+	border: 1px solid #e0e0e0;
+	border-radius: 16px 16px 0 16px;
+	padding: 14px;
+	background: white;
+	animation: option-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.plan-option:nth-child(2) {
+	animation-delay: 0.05s;
+}
+.plan-option:nth-child(3) {
+	animation-delay: 0.1s;
+}
+.plan-option.best {
+	border: 2px solid var(--red);
+	padding-top: 22px;
+}
+.best-tag {
+	position: absolute;
+	top: -11px;
+	left: 14px;
+	background: var(--red);
+	color: white;
+	font-size: 10px;
+	font-weight: 800;
+	letter-spacing: 0.6px;
+	text-transform: uppercase;
+	padding: 4px 9px;
+	border-radius: 8px 8px 0 8px;
+}
+.plan-option-main {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.mode-icon {
+	width: 42px;
+	height: 42px;
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	color: white;
+	border-radius: 12px 12px 0 12px;
+	background: var(--ink);
+}
+.mode-walk {
+	background: #59c355;
+}
+.mode-bike {
+	background: #1c4b1d;
+}
+.mode-scooter {
+	background: #ed2891;
+}
+.mode-car {
+	background: #6b6b6b;
+}
+.mode-taxi {
+	background: #7e2324;
+}
+.row-main > strong small {
+	font-weight: 500;
+	color: var(--slate);
+}
+.plan-time {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	flex-shrink: 0;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.plan-time strong {
+	font-size: 22px;
+	font-weight: 800;
+	line-height: 1.1;
+	font-variant-numeric: tabular-nums;
+}
+.plan-time strong small {
+	font-size: 11px;
+	font-weight: 600;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.plan-time > small {
+	font-size: 10px;
+	color: var(--slate);
+}
+.plan-facts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	margin-top: 10px;
+}
+.plan-facts span {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	border-radius: 7px 7px 0 7px;
+	background: var(--mist);
+	font-size: 11px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+.plan-facts span.live {
+	background: #e8f6e7;
+	color: #2b7a28;
+}
+.plan-reasons {
+	list-style: none;
+	margin: 10px 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	font-size: 12px;
+}
+.plan-reasons li::before {
+	content: "✓ ";
+	color: var(--red);
+	font-weight: 800;
+}
+.plan-option .text-button {
+	padding-bottom: 0;
+}
+.plan-excluded {
+	margin-top: 14px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.plan-excluded > button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	border: 0;
+	background: none;
+	color: var(--slate);
+	font-size: 12px;
+	font-weight: 700;
+	min-height: 40px;
+	padding: 0;
+}
+.plan-excluded ul {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.plan-excluded li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	padding: 6px 0;
+	color: var(--slate);
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.plan-excluded li strong {
+	color: var(--ink);
+}
+@keyframes option-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+}
+
+/* Onboarding: travel profile questions */
+.onboarding {
+	/* The global reset removes the browser's dialog centring. */
+	position: fixed;
+	inset: 0;
+	margin: auto;
+	height: fit-content;
+	width: min(520px, calc(100vw - 24px));
+	max-height: calc(100dvh - 24px);
+	border: 0;
+	border-radius: 24px 24px 0 24px;
+	padding: 22px 24px 20px;
+	color: var(--ink);
+	box-shadow: 0 30px 80px #41445440;
+	overflow: auto;
+}
+.onboarding::backdrop {
+	background: #41445480;
+	backdrop-filter: blur(3px);
+}
+.onboarding-top {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 18px;
+}
+.onboarding-steps {
+	flex: 1;
+	display: flex;
+	gap: 5px;
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.onboarding-steps li {
+	flex: 1;
+	height: 5px;
+	border-radius: 3px;
+	background: var(--mist);
+	transition: background 0.3s;
+}
+.onboarding-steps li.done {
+	background: var(--red);
+}
+.onboarding-close {
+	width: 40px;
+	height: 40px;
+	display: grid;
+	place-items: center;
+	border: 0;
+	border-radius: 10px 10px 0 10px;
+	background: var(--mist);
+	color: var(--ink);
+	cursor: pointer;
+}
+.onboarding section {
+	animation: option-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.onboarding h2 {
+	font-size: 26px;
+	font-weight: 800;
+	letter-spacing: -0.8px;
+	line-height: 1.2;
+	margin: 12px 0 6px;
+}
+.onboarding section > p {
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--slate);
+	margin: 0 0 16px;
+}
+.bubble-tag {
+	display: inline-block;
+	font-size: 12px;
+	font-weight: 900;
+	letter-spacing: 0.5px;
+	padding: 4px 10px;
+	border-radius: 9px 9px 0 9px;
+}
+.bubble-tag.lime {
+	background: #bdd947;
+	color: #ed2891;
+}
+.bubble-tag.pink {
+	background: #ed2891;
+	color: #bdd947;
+}
+.bubble-tag.red {
+	background: var(--red);
+	color: #ffc3e4;
+}
+.bubble-tag.navy {
+	background: var(--ink);
+	color: #ced2df;
+}
+.choice-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 8px;
+}
+.choice {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 58px;
+	padding: 10px 12px;
+	border: 1.5px solid #e0e0e0;
+	border-radius: 13px 13px 0 13px;
+	background: white;
+	color: var(--ink);
+	text-align: left;
+	cursor: pointer;
+	font: inherit;
+	transition:
+		border-color 0.15s,
+		background 0.15s;
+}
+.choice-text {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.choice strong {
+	font-size: 13px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.choice small {
+	font-size: 11px;
+	color: var(--slate);
+}
+.choice-icon {
+	color: var(--slate);
+}
+.choice-check {
+	width: 22px;
+	height: 22px;
+	flex-shrink: 0;
+	display: grid;
+	place-items: center;
+	border-radius: 7px 7px 0 7px;
+	border: 1.5px solid #c3c3c3;
+	color: white;
+}
+.choice[aria-pressed="true"] {
+	border-color: var(--red);
+	background: #fff5f5;
+}
+.choice[aria-pressed="true"] .choice-icon {
+	color: var(--red);
+}
+.choice[aria-pressed="true"] .choice-check {
+	background: var(--red);
+	border-color: var(--red);
+}
+.walk-limits {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 6px;
+	border: 0;
+	padding: 0;
+	margin: 0 0 12px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.walk-limits button {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 12px 4px;
+	border: 1.5px solid #e0e0e0;
+	border-radius: 12px 12px 0 12px;
+	background: white;
+	color: var(--ink);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 700;
+	cursor: pointer;
+}
+.walk-limits button[aria-pressed="true"] {
+	border-color: var(--red);
+	background: var(--red);
+	color: white;
+}
+.onboarding-summary ul {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	font-size: 13px;
+	font-weight: 600;
+}
+.onboarding-summary li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.onboarding-summary li svg {
+	color: var(--red);
+	flex-shrink: 0;
+}
+.onboarding-actions {
+	display: flex;
+	justify-content: space-between;
+	margin-top: 22px;
+	gap: 10px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.onboarding-actions button {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 48px;
+	padding: 0 20px;
+	border: 0;
+	font: inherit;
+	font-size: 13px;
+	font-weight: 800;
+	cursor: pointer;
+	border-radius: 12px 12px 0 12px;
+}
+.onboarding-back {
+	background: none;
+	color: var(--slate);
+}
+.onboarding-next {
+	background: var(--red);
+	color: white;
+}
+.onboarding :focus-visible {
+	outline: 3px solid var(--red);
+	outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.plan-option,
+	.onboarding section {
+		animation: none;
+	}
+}
+
+/* The planner has its own destination field. */
+.transit-app[data-view="plan"] .transit-search {
+	display: none;
+}
+
+/* Welcome screen for visitors who aren't signed in */
+.welcome h2 {
+	font-size: 30px;
+}
+.welcome-points {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	font-size: 13px;
+	font-weight: 600;
+}
+.welcome-points li {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.welcome-points svg {
+	color: var(--red);
+	flex-shrink: 0;
+	margin-top: 1px;
+}
+.welcome-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 24px;
+}
+.welcome-actions > * {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 48px;
+	border-radius: 12px 12px 0 12px;
+	font-size: 13px;
+	font-weight: 800;
+	text-decoration: none;
+	border: 0;
+	cursor: pointer;
+}
+.welcome-signin {
+	background: var(--mist);
+	color: var(--ink);
+}
+
+/* Choosing an option draws it on the map */
+.plan-option.selected {
+	box-shadow: 0 0 0 3px #ed1c2422;
+}
+.option-select {
+	margin-top: 10px;
+	width: 100%;
+	min-height: 40px;
+	border: 1.5px solid #e0e0e0;
+	border-radius: 10px 10px 0 10px;
+	background: white;
+	color: var(--ink);
+	font-size: 12px;
+	font-weight: 700;
+}
+.option-select[aria-pressed="true"] {
+	background: var(--ink);
+	border-color: var(--ink);
+	color: white;
+}
+.recent-places {
+	margin-top: 12px;
+}
+.recent-places > span {
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--slate);
+}
+.recent-places > div {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 6px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: planner and onboarding are separate containers. */
+.recent-places button {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	min-height: 36px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 10px 10px 0 10px;
+	background: #fdebec;
+	color: var(--red);
+	font-size: 12px;
+	font-weight: 700;
+}

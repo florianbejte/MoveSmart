@@ -30,8 +30,8 @@ export default function SignUpForm({
 				},
 				{
 					onSuccess: () => {
-						router.push("/dashboard");
-						toast.success("Sign up successful");
+						router.push("/");
+						toast.success("Account created. Now tell us how you travel.");
 					},
 					onError: (error) => {
 						toast.error(error.error.message || error.error.statusText);

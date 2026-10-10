@@ -3,7 +3,7 @@
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 import { UserRound } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import SignInForm from "@/components/sign-in-form";
 import SignUpForm from "@/components/sign-up-form";
@@ -17,11 +17,12 @@ function DashboardContent() {
 			</span>
 			<h1>Your account.</h1>
 			<p>
-				You’re signed in. Explore Vilnius or use the account menu to sign out.
+				You’re signed in. Your travel profile ranks every trip you plan. Use the
+				account menu to sign out.
 			</p>
 			<UserMenu />
 			<Link href="/" className="account-link">
-				Explore the live map
+				Plan a trip
 			</Link>
 		</section>
 	);
@@ -29,6 +30,12 @@ function DashboardContent() {
 
 export default function DashboardPage() {
 	const [showSignIn, setShowSignIn] = useState(false);
+	// The welcome screen links here with ?mode=signin for returning users.
+	useEffect(() => {
+		setShowSignIn(
+			new URLSearchParams(window.location.search).get("mode") === "signin",
+		);
+	}, []);
 
 	return (
 		<main className="account-page">

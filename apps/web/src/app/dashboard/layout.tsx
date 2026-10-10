@@ -1,6 +1,5 @@
 import { BusFront } from "lucide-react";
 import Link from "next/link";
-import Providers from "@/components/providers";
 import { ENV } from "@/env";
 import { getAuthServer } from "@/lib/auth-server";
 
@@ -25,10 +24,6 @@ export default async function DashboardLayout({
 				</section>
 			</main>
 		);
-	const token = await auth.getToken();
-	return (
-		<Providers initialToken={token} convexUrl={ENV.NEXT_PUBLIC_CONVEX_URL}>
-			{children}
-		</Providers>
-	);
+	// Providers are set up in the root layout.
+	return children;
 }

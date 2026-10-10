@@ -1,6 +1,8 @@
 import { strFromU8, unzipSync } from "fflate";
+import { findRides } from "../plan/transit";
 import {
 	activeService,
+	distance,
 	freshVehicle,
 	gtfsSeconds,
 	localParts,
@@ -14,6 +16,7 @@ import type {
 	Departure,
 	LiveFeed,
 	Network,
+	Position,
 	Stop,
 	StopBoard,
 	TransitRoute,
@@ -320,5 +323,75 @@ export async function getTrip(id: string): Promise<TripDetail | null> {
 			const stop = data.stops.get(t.stopId);
 			return stop ? [stop] : [];
 		}),
+	};
+}
+/** Direct rides between two points in the next 90 minutes, using live delays where vehicles report them. */
+export async function getRides(from: Position, to: Position, walkPace = 75) {
+	const [data, feed] = await Promise.all([
+		getSchedule(),
+		getLive().catch(() => null),
+	]);
+	const now = Date.now();
+	const near = (p: Position, radius: number) =>
+		new Map(
+			data.network.stops
+				.map((s) => [s.id, distance(p, s)] as const)
+				.filter(([, d]) => d <= radius)
+				.sort((a, b) => a[1] - b[1])
+				.slice(0, 12),
+		);
+	const vehicles = new Map(
+		(feed && !feed.stale ? feed.vehicles : [])
+			.filter((v) => v.tripId && freshVehicle(v, now))
+			.map((v) => [v.tripId, v]),
+	);
+	const today = localParts(now).date;
+	const days = [shiftDate(today, -1), today].map((date) => ({
+		date,
+		start: serviceStart(date),
+	}));
+	const rides = findRides({
+		now,
+		origins: near(from, 700),
+		destinations: near(to, 700),
+		departures: (stopId) => data.stopTimes.get(stopId) ?? [],
+		tripVisits: (tripId) => data.tripStops.get(tripId) ?? [],
+		routeOf: (tripId) => data.trips.get(tripId)?.route_id,
+		serviceStarts: (tripId) => {
+			const trip = data.trips.get(tripId);
+			if (!trip) return [];
+			return days
+				.filter(({ date }) =>
+					activeService(
+						data.calendar.get(trip.service_id),
+						data.exceptions.get(`${trip.service_id}:${date}`),
+						date,
+					),
+				)
+				.map((d) => d.start);
+		},
+		delayOf: (tripId, start) => {
+			const times = data.tripStops.get(tripId) ?? [];
+			// Live delay applies only to the service instance that is running now.
+			const running =
+				now >= start + (times[0]?.time ?? 0) * 1000 - 30 * 60_000 &&
+				now <= start + (times.at(-1)?.time ?? 0) * 1000 + 2 * 3600_000;
+			const delay = running ? vehicles.get(tripId)?.delay : undefined;
+			return delay ?? null;
+		},
+		walkMinutes: (m) => Math.max(1, Math.round((m * 1.25) / walkPace)),
+	});
+	return {
+		rides: rides.map((r) => ({
+			...r,
+			fromStop: data.stops.get(r.fromStopId)?.name ?? r.fromStopId,
+			toStop: data.stops.get(r.toStopId)?.name ?? r.toStopId,
+			destination:
+				data.trips.get(r.tripId)?.trip_headsign ||
+				data.trips.get(r.tripId)?.direction_name ||
+				"",
+		})),
+		generatedAt: now,
+		stale: data.network.stale || !feed || feed.stale,
 	};
 }
