@@ -171,7 +171,7 @@ export default function TransitMap(props: Props) {
 				type: "geojson",
 				data: { type: "FeatureCollection", features: [] },
 				attribution:
-					'© <a href="https://judu.lt/atviri-duomenys/" target="_blank" rel="noopener noreferrer">JUDU / Vilnius</a> · <a href="https://open.geodata.gov.lt/datasets/8a1e4b06ca714e2983b67c737c667abe_0/">Shelters: PAGD / VDA (CC BY 4.0)</a>',
+					'© <a href="https://judu.lt/atviri-duomenys/" target="_blank" rel="noopener noreferrer">JUDU / Vilnius</a> · <a href="https://open.geodata.gov.lt/datasets/8a1e4b06ca714e2983b67c737c667abe_0/">Shelters: PAGD / VDA (CC BY 4.0)</a> · <a href="https://gis.ktvis.lt/arcgis/rest/services/LAKD/Nac_taku_pletra/MapServer/11">Paths: KTVIS</a>',
 			});
 			instance.addLayer({
 				id: "city-fill",
@@ -189,7 +189,7 @@ export default function TransitMap(props: Props) {
 					"line-color": ["get", "color"],
 					"line-width": [
 						"case",
-						["==", ["get", "category"], "congestion"],
+						["in", ["get", "category"], ["literal", ["congestion", "bikes"]]],
 						4,
 						2,
 					],

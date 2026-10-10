@@ -153,3 +153,47 @@ test("shelters preserve published capacity and distinguish unknown access from n
 	assert.equal(shelter.properties.end, null);
 	assert.match(shelter.properties.timing, /occupancy unknown/);
 });
+
+test("cycling paths keep unique segment IDs without guessing undocumented codes", () => {
+	const feature = {
+		type: "Feature" as const,
+		id: 1,
+		geometry: {
+			type: "LineString" as const,
+			coordinates: [
+				[25.2, 54.7],
+				[25.21, 54.71],
+			],
+		},
+		properties: {
+			OBJECTID_1: 1,
+			OBJECTID: 415,
+			b_1: "<b>Įrengta 2018 m.</b>",
+			Shape_Length: 92.56,
+			TIPAS_1: 2,
+			DANGA_1: "A",
+		},
+	};
+	const a = normaliseCityFeature(feature, "bikes", "ktvis", Date.now());
+	const b = normaliseCityFeature(
+		{ ...feature, properties: { ...feature.properties, OBJECTID_1: 2 } },
+		"bikes",
+		"ktvis",
+		Date.now(),
+	);
+	assert.ok(a && b);
+	assert.notEqual(a.properties.id, b.properties.id);
+	assert.match(a.properties.description, /93 m/);
+	assert.match(a.properties.description, /Įrengta 2018 m\./);
+	assert.doesNotMatch(a.properties.description, /<b>|Asphalt|protected/i);
+	assert.equal(a.properties.end, null);
+	assert.equal(
+		normaliseCityFeature(
+			{ ...feature, geometry: { type: "Point", coordinates: [25, 54] } },
+			"bikes",
+			"ktvis",
+			Date.now(),
+		),
+		null,
+	);
+});

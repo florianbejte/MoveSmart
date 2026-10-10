@@ -258,3 +258,15 @@ and follows currently reporting buses. Hover for report age/count; select a mark
 to open details and confirm. Expired reports are removed from the map and panels.
 Stars save stops and routes under **Saved**, locally in this browser (not account
 synced). Reports are rider observations, not verified operator announcements.
+
+### Bike lanes and paths
+
+Enable **Layers → Bike lanes & paths** for teal lines with hover previews and
+click-to-pin details. Source: [KTVIS existing municipal paths — Vilnius](https://gis.ktvis.lt/arcgis/rest/services/LAKD/Nac_taku_pletra/MapServer/11),
+under the national path-development service's **existing municipal paths** group.
+Only Vilnius layer 11 is loaded; planned layers are excluded. This is an inventory
+which may include shared pedestrian/cycling paths, not verified protected lanes,
+live closures, or a complete/current routing network. Undocumented type, surface,
+and condition codes are not interpreted. Popups show published notes and mapped
+segment length. Requests use WGS84 GeoJSON, bounded ID batches and a six-hour cache;
+source failures retain cached data with an explicit stale indicator.

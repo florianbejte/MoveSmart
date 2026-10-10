@@ -23,7 +23,9 @@ export function useCityLayers(now: number) {
 	const signals = useTransit<CityFeed>(url("signals"), 300000);
 	const corridors = useTransit<CityFeed>(url("corridors"), 300000);
 	const shelters = useTransit<CityFeed>(url("shelters"), 300000);
+	const bikes = useTransit<CityFeed>(url("bikes"), 300000);
 	const feeds = {
+		bikes,
 		shelters,
 		incidents,
 		roadworks,
@@ -45,6 +47,7 @@ export function useCityLayers(now: number) {
 				signals.data,
 				corridors.data,
 				shelters.data,
+				bikes.data,
 			]
 				.flatMap((feed) => feed?.collection.features ?? [])
 				.filter(
@@ -62,6 +65,7 @@ export function useCityLayers(now: number) {
 			signals.data,
 			corridors.data,
 			shelters.data,
+			bikes.data,
 			enabled,
 			now,
 		],
@@ -104,7 +108,9 @@ export function CityLayers({
 			!!feed.error ||
 			feed.data?.stale ||
 			(feed.data &&
-				!["parking", "signals", "corridors", "shelters"].includes(id) &&
+				!["parking", "signals", "corridors", "shelters", "bikes"].includes(
+					id,
+				) &&
 				now - feed.data.fetchedAt > 120000)
 		);
 	});
@@ -158,9 +164,13 @@ export function CityLayers({
 							!!feed.error ||
 							feed.data?.stale ||
 							(feed.data &&
-								!["parking", "signals", "corridors", "shelters"].includes(
-									layer.id,
-								) &&
+								![
+									"parking",
+									"signals",
+									"corridors",
+									"shelters",
+									"bikes",
+								].includes(layer.id) &&
 								now - feed.data.fetchedAt > 120000);
 						const count = feed.data?.collection.features.filter((f) =>
 							eventStillRelevant(f.properties, now),

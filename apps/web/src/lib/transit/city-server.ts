@@ -1,5 +1,10 @@
 import type { Feature } from "geojson";
-import { type CityFeed, type CityLayerId, normaliseCityFeature } from "./city";
+import {
+	BIKE_SOURCE,
+	type CityFeed,
+	type CityLayerId,
+	normaliseCityFeature,
+} from "./city";
 
 const BASE =
 	"https://arcgis.sviesoforai.lt/arcgis/rest/services/VIS/Vilnius_sde_dynamic/MapServer";
@@ -13,6 +18,7 @@ const event = (id: number): Source => ({
 	fields: EVENTS,
 });
 const SOURCES: Record<CityLayerId, Source[]> = {
+	bikes: [{ url: BIKE_SOURCE, fields: "OBJECTID_1,b_1,Shape_Length" }],
 	shelters: [
 		{
 			url: "https://services-eu1.arcgis.com/rHAjZpbf6qHK8UCL/arcgis/rest/services/Priedangų_tinklas_Lietuvoje_(TEST)/FeatureServer/0",
@@ -111,7 +117,9 @@ async function fetchSource(source: Source, ttl: number): Promise<Cached> {
 }
 export async function getCityLayer(category: CityLayerId): Promise<CityFeed> {
 	const sources = SOURCES[category];
-	const ttl = ["parking", "signals", "corridors", "shelters"].includes(category)
+	const ttl = ["parking", "signals", "corridors", "shelters", "bikes"].includes(
+		category,
+	)
 		? 6 * 60 * 60 * 1000
 		: 60000;
 	const results = await Promise.allSettled(

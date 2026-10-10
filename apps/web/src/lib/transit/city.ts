@@ -2,7 +2,15 @@ import type { Feature, FeatureCollection, Geometry } from "geojson";
 
 export const SHELTER_SOURCE =
 	"https://open.geodata.gov.lt/datasets/8a1e4b06ca714e2983b67c737c667abe_0/";
+export const BIKE_SOURCE =
+	"https://gis.ktvis.lt/arcgis/rest/services/LAKD/Nac_taku_pletra/MapServer/11";
 export const CITY_LAYERS = [
+	{
+		id: "bikes",
+		label: "Bike lanes & paths",
+		color: "#087f8c",
+		note: "KTVIS existing municipal paths in Vilnius. May include shared paths; coverage and current condition are not guaranteed. Planned paths are excluded.",
+	},
 	{
 		id: "shelters",
 		label: "Civil-protection shelters",
@@ -169,6 +177,22 @@ export function normaliseCityFeature(
 		.filter(Boolean)
 		.join(" · ");
 	let color: string = config.color;
+	if (category === "bikes") {
+		if (!["LineString", "MultiLineString"].includes(feature.geometry.type))
+			return null;
+		title = "Vilnius cycling path";
+		const length = p.shapelength;
+		description = [
+			text("b1"),
+			typeof length === "number" && Number.isFinite(length) && length > 0
+				? `Mapped segment: ${Math.round(length)} m`
+				: "",
+			"Published as an existing municipal path. May be shared with pedestrians; current access and condition are not provided.",
+		]
+			.filter(Boolean)
+			.join("\n");
+		timing = "Infrastructure · update date not provided";
+	}
 	if (category === "parking") {
 		const zones: Record<string, [string, string]> = {
 			Geltona: ["Yellow", "#d0a31b"],
@@ -221,7 +245,7 @@ export function normaliseCityFeature(
 			.join("\n");
 		timing = "Published information · live access and occupancy unknown";
 	}
-	const id = `${source}/${String(p.objectid ?? feature.id ?? "")}`;
+	const id = `${source}/${String(p.objectid1 ?? p.objectid ?? feature.id ?? "")}`;
 	return {
 		type: "Feature",
 		id,
