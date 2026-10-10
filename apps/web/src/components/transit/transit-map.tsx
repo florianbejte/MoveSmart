@@ -13,7 +13,7 @@ import type {
 } from "@/lib/transit/types";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { ENV } from "@/env";
-
+import type { CommunityCollection } from "@/lib/reports/map";
 import {
 	CITY_LAYERS,
 	type CityCollection,
@@ -25,6 +25,7 @@ import type { PlanPath } from "./trip-planner";
 import { vehiclePopupContent } from "./vehicle-popup";
 
 type Props = {
+	community: CommunityCollection;
 	city: CityCollection;
 	cityDelayed: CityLayerId[];
 	onCityPin: () => void;
@@ -32,6 +33,7 @@ type Props = {
 	now: number;
 	vehicles: Vehicle[];
 	stops: Stop[];
+	selectedStop?: Stop;
 	trip?: TripDetail;
 	tripColor: string;
 	routes: TransitRoute[];
@@ -51,6 +53,8 @@ export default function TransitMap(props: Props) {
 	const vehiclePopup = useRef<{ id: string; popup: maplibregl.Popup } | null>(
 		null,
 	);
+	const communityPreview = useRef<maplibregl.Popup | null>(null);
+	const communityPreviewId = useRef<string | null>(null);
 	const userMarker = useRef<maplibregl.Marker | null>(null);
 	const handlers = useRef(props);
 	const cityPopup = useRef<{
@@ -144,6 +148,11 @@ export default function TransitMap(props: Props) {
 			if (instance.areTilesLoaded()) setError(null);
 		});
 		instance.on("load", () => {
+			instance.addImage(
+				"symbol-community",
+				mapSymbolImage("community", "#7343aa"),
+				{ pixelRatio: 2 },
+			);
 			for (const layer of CITY_LAYERS)
 				instance.addImage(
 					`symbol-${layer.id}`,
@@ -215,6 +224,13 @@ export default function TransitMap(props: Props) {
 			const showCity = (e: maplibregl.MapMouseEvent, pinned: boolean) => {
 				if (!pinned && cityPopup.current?.pinned) return;
 				const target = e.originalEvent.target;
+				if (
+					instance.getLayer("community-points") &&
+					instance.queryRenderedFeatures(e.point, {
+						layers: ["community-points"],
+					}).length
+				)
+					return;
 				if (target instanceof Element && target.closest(".maplibregl-popup"))
 					return;
 				if (
@@ -407,6 +423,79 @@ export default function TransitMap(props: Props) {
 			instance.on("mouseleave", "stops-points", () => {
 				instance.getCanvas().style.cursor = "";
 			});
+			instance.addSource("community", {
+				type: "geojson",
+				data: { type: "FeatureCollection", features: [] },
+			});
+			instance.addLayer({
+				id: "community-points",
+				type: "symbol",
+				source: "community",
+				layout: {
+					"icon-image": "symbol-community",
+					"icon-size": 0.9,
+					"icon-offset": [0, -32],
+					"icon-allow-overlap": false,
+					"icon-padding": 3,
+				},
+			});
+			instance.on("click", "community-points", (e) => {
+				const p = e.features?.[0]?.properties;
+				if (!p) return;
+				communityPreview.current?.remove();
+				cityPopup.current?.popup.remove();
+				if (p.target === "stop") handlers.current.onStop(String(p.id));
+				else handlers.current.onVehicle(String(p.id));
+			});
+			instance.on("mousemove", "community-points", (e) => {
+				const p = e.features?.[0]?.properties;
+				const geometry = e.features?.[0]?.geometry;
+				if (!p || geometry?.type !== "Point" || e.originalEvent.buttons) return;
+				const key = `${p.target}:${p.id}`;
+				if (
+					communityPreviewId.current === key &&
+					communityPreview.current?.isOpen()
+				)
+					return;
+				communityPreview.current?.remove();
+				vehiclePopup.current?.popup.remove();
+				communityPreviewId.current = key;
+				if (!cityPopup.current?.pinned) cityPopup.current?.popup.remove();
+				const root = document.createElement("article");
+				root.className = "city-map-detail";
+				root.setAttribute("role", "tooltip");
+				for (const [tag, text] of [
+					["span", "Community report"],
+					["h3", String(p.title)],
+					["p", String(p.description)],
+					[
+						"small",
+						`${p.count} reports · ${Math.max(1, Math.floor((handlers.current.now - Number(p.updatedAt)) / 60000))} min ago`,
+					],
+					["small", "Click to view or confirm"],
+				]) {
+					const node = document.createElement(tag);
+					node.textContent = text;
+					root.append(node);
+				}
+				communityPreview.current = new maplibregl.Popup({
+					closeButton: false,
+					closeOnClick: false,
+					focusAfterOpen: false,
+					offset: 40,
+					maxWidth: "280px",
+					className: "city-map-popup is-preview",
+				})
+					.setLngLat([geometry.coordinates[0], geometry.coordinates[1]])
+					.setDOMContent(root)
+					.addTo(instance);
+				instance.getCanvas().style.cursor = "pointer";
+			});
+			instance.on("mouseleave", "community-points", () => {
+				communityPreview.current?.remove();
+				instance.getCanvas().style.cursor = "";
+			});
+			instance.on("movestart", () => communityPreview.current?.remove());
 			setReady(true);
 		});
 		instance.on("moveend", () => {
@@ -424,6 +513,7 @@ export default function TransitMap(props: Props) {
 			instance.getContainer().removeEventListener("keydown", closeOnEscape);
 			cityPopup.current?.popup.remove();
 			vehiclePopup.current?.popup.remove();
+			communityPreview.current?.remove();
 			observer.disconnect();
 			instance.remove();
 			map.current = null;
@@ -431,6 +521,27 @@ export default function TransitMap(props: Props) {
 			userMarker.current = null;
 		};
 	}, []);
+	useEffect(() => {
+		if (!ready || !map.current) return;
+		(map.current.getSource("community") as maplibregl.GeoJSONSource)?.setData(
+			props.community,
+		);
+		const preview = communityPreview.current;
+		if (preview?.isOpen()) {
+			const feature = props.community.features.find(
+				(f) =>
+					`${f.properties.target}:${f.properties.id}` ===
+					communityPreviewId.current,
+			);
+			if (feature)
+				preview.setLngLat([
+					feature.geometry.coordinates[0],
+					feature.geometry.coordinates[1],
+				]);
+			else preview.remove();
+		}
+	}, [ready, props.community]);
+
 	useEffect(() => {
 		if (!ready || !map.current) return;
 		(
@@ -457,23 +568,30 @@ export default function TransitMap(props: Props) {
 	useEffect(() => {
 		if (!ready || !map.current) return;
 		const source = map.current.getSource("stops") as maplibregl.GeoJSONSource;
+		// Keep the inspected stop on the map even outside the active search,
+		// route, mode or GPS-nearby filter. The highlighted layer ignores collisions.
+		const stops =
+			props.selectedStop &&
+			!props.stops.some((s) => s.id === props.selectedStop?.id)
+				? [...props.stops, props.selectedStop]
+				: props.stops;
 		source?.setData({
 			type: "FeatureCollection",
-			features: props.stops.map((s) => ({
+			features: stops.map((s) => ({
 				type: "Feature",
 				properties: { id: s.id },
 				geometry: { type: "Point", coordinates: [s.lon, s.lat] },
 			})),
 		});
-	}, [ready, props.stops]);
+	}, [ready, props.stops, props.selectedStop]);
 	useEffect(() => {
 		if (ready && map.current?.getLayer("selected-stop"))
 			map.current.setFilter("selected-stop", [
 				"==",
 				["get", "id"],
-				props.selectedId ?? "",
+				props.selectedStop?.id ?? "",
 			]);
-	}, [ready, props.selectedId]);
+	}, [ready, props.selectedStop]);
 	useEffect(() => {
 		if (!ready || !map.current) return;
 		const source = map.current.getSource("route") as maplibregl.GeoJSONSource;
@@ -516,6 +634,7 @@ export default function TransitMap(props: Props) {
 					const latest = current.vehicles.find((v) => v.id === vehicle.id);
 					if (!latest || !map.current || map.current.isMoving()) return;
 					vehiclePopup.current?.popup.remove();
+					communityPreview.current?.remove();
 					if (!cityPopup.current?.pinned) cityPopup.current?.popup.remove();
 					const popup = new maplibregl.Popup({
 						closeButton: false,

@@ -12,18 +12,22 @@ import {
 	LocateFixed,
 	Map as MapIcon,
 	MapPin,
+	MessageCirclePlus,
 	Navigation,
 	Radio,
 	RefreshCw,
 	Route,
 	Search,
 	SlidersHorizontal,
+	Star,
 	X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_PROFILE } from "@/lib/plan/profile";
-import { distance, freshVehicle } from "@/lib/transit/core";
+import { communityFeatures } from "@/lib/reports/map";
+import type { ReportsFeed } from "@/lib/reports/types";
+import { distance, freshVehicle, localParts } from "@/lib/transit/core";
 import { SERVICE_COLORS, serviceColor } from "@/lib/transit/service-colors";
 import type {
 	LiveFeed,
@@ -37,6 +41,17 @@ import type {
 } from "@/lib/transit/types";
 import { useAccount } from "../account";
 import { CityLayers, useCityLayers } from "./city-layers";
+import {
+	ConfirmReport,
+	DepartureCrowding,
+	FavouriteButton,
+	reportForDeparture,
+	SavedPanel,
+	StopCommunity,
+	StopReportDialog,
+	useFavourites,
+} from "./community-tools";
+import { CrowdingCard, CrowdingReport } from "./crowding-report";
 import { MapSymbol } from "./map-symbol";
 import { Onboarding } from "./onboarding";
 import { type PlanPath, TripPlanner } from "./trip-planner";
@@ -96,6 +111,14 @@ export default function TransitExplorer() {
 	const network = useTransit<Network>("/api/transit?kind=network", 300_000);
 	const live = useTransit<LiveFeed>("/api/transit?kind=vehicles");
 	const [query, setQuery] = useState("");
+	const reports = useTransit<ReportsFeed>("/api/reports", 30000);
+	const [reportTarget, setReportTarget] = useState<{
+		vehicle?: Vehicle;
+	} | null>(null);
+	const favourites = useFavourites();
+	const [savedOpen, setSavedOpen] = useState(false);
+	const [stopReport, setStopReport] = useState<Stop | null>(null);
+	const [communityEnabled, setCommunityEnabled] = useState(true);
 	const [mode, setMode] = useState<"all" | "bus" | "trolleybus">("all");
 	const [routeId, setRouteId] = useState("");
 	const [nearbyOnly, setNearbyOnly] = useState(false);
@@ -147,6 +170,7 @@ export default function TransitExplorer() {
 	const sheetPointer = useRef<number | null>(null);
 	const sheetSwiped = useRef(false);
 	function openNearby() {
+		setSavedOpen(false);
 		setSelection(null);
 		setPreviewTrip(null);
 		setCityOpen(false);
@@ -154,6 +178,7 @@ export default function TransitExplorer() {
 		setSheet("half");
 	}
 	function openPlan() {
+		setSavedOpen(false);
 		setPlanOpen(true);
 		setCityOpen(false);
 		setSelection(null);
@@ -161,6 +186,7 @@ export default function TransitExplorer() {
 		panelContent.current?.scrollTo({ top: 0 });
 	}
 	function openLayers() {
+		setSavedOpen(false);
 		setCityOpen(true);
 		setPlanOpen(false);
 		setSheet("half");
@@ -175,6 +201,16 @@ export default function TransitExplorer() {
 	const stops = network.data?.stops ?? EMPTY_STOPS;
 	const vehicles = live.data?.vehicles ?? EMPTY_VEHICLES;
 	const origin = location ?? center;
+	const community = useMemo(
+		() =>
+			communityFeatures(
+				communityEnabled && !reports.error ? reports.data : undefined,
+				stops,
+				vehicles,
+				now,
+			),
+		[communityEnabled, reports.error, reports.data, stops, vehicles, now],
+	);
 	const routeById = useMemo(
 		() => new Map(network.data?.routes.map((r) => [r.id, r]) ?? []),
 		[network.data],
@@ -254,6 +290,8 @@ export default function TransitExplorer() {
 		setFocus({ ...position, key: Date.now() });
 	}
 	function selectStop(id: string) {
+		setPlanOpen(false);
+		setSavedOpen(false);
 		setSheet("half");
 		setFiltersOpen(false);
 		setCityOpen(false);
@@ -264,6 +302,8 @@ export default function TransitExplorer() {
 		if (stop) focusOn(stop);
 	}
 	function selectVehicle(id: string) {
+		setPlanOpen(false);
+		setSavedOpen(false);
 		setSheet("half");
 		setFiltersOpen(false);
 		setCityOpen(false);
@@ -441,7 +481,7 @@ export default function TransitExplorer() {
 				<nav className="panel-tabs" aria-label="Explore views">
 					<button
 						type="button"
-						aria-pressed={!cityOpen && !planOpen}
+						aria-pressed={!cityOpen && !planOpen && !savedOpen}
 						onClick={openNearby}
 					>
 						<MapPin size={16} />
@@ -455,6 +495,21 @@ export default function TransitExplorer() {
 						<Layers2 size={16} />
 						Layers
 						<span className="layer-count">{city.enabled.length}</span>
+					</button>
+					<button
+						type="button"
+						aria-pressed={savedOpen}
+						onClick={() => {
+							setSavedOpen(true);
+							setPlanOpen(false);
+							setCityOpen(false);
+							setSelection(null);
+							setPreviewTrip(null);
+							setSheet("half");
+						}}
+					>
+						<Star size={16} />
+						Saved
 					</button>
 				</nav>
 				<div className="panel-content" ref={panelContent}>
@@ -502,6 +557,13 @@ export default function TransitExplorer() {
 										))}
 								</select>
 							</label>
+							{routeId && (
+								<FavouriteButton
+									active={favourites.saved.routes.includes(routeId)}
+									onClick={() => favourites.toggle("routes", routeId)}
+									label="route"
+								/>
+							)}
 							<button
 								type="button"
 								className={`nearby-toggle ${nearbyOnly ? "active" : ""}`}
@@ -571,6 +633,32 @@ export default function TransitExplorer() {
 							</button>
 						</div>
 					)}
+					{cityOpen && (
+						<section className="community-layer-control">
+							<label>
+								<input
+									type="checkbox"
+									checked={communityEnabled}
+									onChange={(e) => setCommunityEnabled(e.target.checked)}
+								/>
+								<MapSymbol kind="community" color="#7343aa" />
+								Community reports · {community.features.length}
+							</label>
+							<p>
+								Rider observations, separate from official alerts. Click a
+								purple icon to view reports and confirm.
+							</p>
+							{reports.error && (
+								<p role="status">
+									Community reports unavailable.{" "}
+									<button type="button" onClick={reports.retry}>
+										Retry
+									</button>
+								</p>
+							)}
+						</section>
+					)}
+					{favourites.error && <p role="status">{favourites.error}</p>}
 					<CityLayers
 						city={city}
 						now={now}
@@ -623,6 +711,23 @@ export default function TransitExplorer() {
 										</p>
 									</div>
 								</div>
+								{selectedStop && (
+									<FavouriteButton
+										active={favourites.saved.stops.includes(selectedStop.id)}
+										onClick={() => favourites.toggle("stops", selectedStop.id)}
+										label="stop"
+									/>
+								)}
+								{selectedStop && (
+									<StopCommunity
+										stop={selectedStop}
+										issues={reports.error ? [] : (reports.data?.issues ?? [])}
+										now={now}
+										onReport={() => setStopReport(selectedStop)}
+										onRefresh={reports.retry}
+										unavailable={!!reports.error}
+									/>
+								)}
 								<div className="stop-route-list">
 									{selectedStop?.routeIds.map((id) => (
 										<RouteBadge key={id} route={routeById.get(id)} />
@@ -661,6 +766,9 @@ export default function TransitExplorer() {
 									.filter((d) => d.estimatedAt >= now)
 									.slice(0, 20)
 									.map((d) => {
+										const crowding = !reports.error
+											? reportForDeparture(reports.data?.reports ?? [], d, now)
+											: undefined;
 										const isLive =
 											d.live &&
 											!board.error &&
@@ -690,6 +798,9 @@ export default function TransitExplorer() {
 																: "Scheduled"}{" "}
 														· {timeFormat.format(d.scheduledAt)}
 													</small>
+													{isLive && (
+														<DepartureCrowding report={crowding} now={now} />
+													)}
 												</span>
 												<span
 													className={`departure-time ${isLive ? "live" : ""}`}
@@ -717,6 +828,7 @@ export default function TransitExplorer() {
 											</p>
 										</div>
 									)}
+
 								{previewTrip && (
 									<p className="helper-text">
 										Selected departure’s route is highlighted on the map.
@@ -746,6 +858,59 @@ export default function TransitExplorer() {
 											</h2>
 										</div>
 									</div>
+									<CrowdingCard
+										report={
+											!reports.error
+												? reports.data?.reports.find(
+														(r) =>
+															r.vehicleId === selectedVehicle.id &&
+															r.tripId ===
+																`${localParts(now).date}:${selectedVehicle.tripId}` &&
+															r.expiresAt > now,
+													)
+												: undefined
+										}
+										unavailable={!!reports.error}
+										onReport={() =>
+											setReportTarget({ vehicle: selectedVehicle })
+										}
+									/>
+									{selectedVehicle.routeId && (
+										<FavouriteButton
+											active={favourites.saved.routes.includes(
+												selectedVehicle.routeId,
+											)}
+											onClick={() =>
+												favourites.toggle(
+													"routes",
+													selectedVehicle.routeId as string,
+												)
+											}
+											label={`route ${selectedVehicle.route}`}
+										/>
+									)}
+									{reports.data?.reports
+										.filter(
+											(r) =>
+												!reports.error &&
+												r.vehicleId === selectedVehicle.id &&
+												r.tripId ===
+													`${localParts(now).date}:${selectedVehicle.tripId}` &&
+												r.expiresAt > now,
+										)
+										.map((r) => (
+											<ConfirmReport
+												key={`${r.vehicleId}:${r.tripId}:${r.level}`}
+												disabled={!selectedFresh}
+												body={{
+													vehicleId: r.vehicleId,
+													tripId: selectedVehicle.tripId,
+													level: r.level,
+													confirm: true,
+												}}
+												onDone={reports.retry}
+											/>
+										))}
 									<div className="vehicle-metrics">
 										<div>
 											<span>Speed</span>
@@ -822,6 +987,22 @@ export default function TransitExplorer() {
 									</p>
 								</div>
 							)
+						) : savedOpen ? (
+							<SavedPanel
+								saved={favourites.saved}
+								stops={stops}
+								routes={routes}
+								onStop={selectStop}
+								onRoute={(id) => {
+									openNearby();
+									setRouteId(id);
+									setMode("all");
+									setQuery("");
+									setNearbyOnly(false);
+									setFiltersOpen(true);
+								}}
+								onRemove={favourites.toggle}
+							/>
 						) : (
 							<>
 								<div className="section-heading">
@@ -968,6 +1149,7 @@ export default function TransitExplorer() {
 			</aside>
 			<section className="map-panel" aria-label="Map and live vehicles">
 				<TransitMap
+					community={community}
 					city={city.collection}
 					routes={routes}
 					tripColor={serviceColor(
@@ -995,6 +1177,7 @@ export default function TransitExplorer() {
 							: filteredVehicles
 					}
 					stops={filteredStops}
+					selectedStop={selectedStop}
 					trip={trip.data}
 					selectedId={selection?.id}
 					location={location}
@@ -1020,6 +1203,14 @@ export default function TransitExplorer() {
 					</div>
 				</div>
 				<div className="map-actions">
+					<button
+						type="button"
+						className="map-report-button"
+						aria-label="Report bus crowding"
+						onClick={() => setReportTarget({ vehicle: selectedVehicle })}
+					>
+						<MessageCirclePlus size={22} />
+					</button>
 					<button
 						type="button"
 						className="map-location"
@@ -1075,6 +1266,27 @@ export default function TransitExplorer() {
 					Transit data: JUDU / stops.lt ↗
 				</a>
 			</section>
+			{stopReport && (
+				<StopReportDialog
+					stop={stopReport}
+					vehicles={vehicles}
+					now={now}
+					onClose={() => setStopReport(null)}
+					onSent={reports.retry}
+				/>
+			)}
+			{reportTarget && (
+				<CrowdingReport
+					initialVehicle={reportTarget.vehicle}
+					vehicles={vehicles}
+					now={now}
+					onClose={() => setReportTarget(null)}
+					onSent={(vehicle) => {
+						reports.retry();
+						selectVehicle(vehicle.id);
+					}}
+				/>
+			)}
 			<nav className="mobile-dock" aria-label="Map views">
 				<button
 					type="button"

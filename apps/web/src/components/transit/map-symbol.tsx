@@ -1,8 +1,9 @@
 import type { CityLayerId } from "@/lib/transit/city";
 
-export type MapSymbolKind = CityLayerId | "stop";
+export type MapSymbolKind = CityLayerId | "stop" | "community";
 // The same vector paths are used in the map atlas, layer switches and legend.
 const paths: Record<MapSymbolKind, string[]> = {
+	community: ["M3 3h18v14H9l-6 4z", "M7 8h10", "M7 12h6"],
 	stop: [
 		"M6 3h12v15H6z",
 		"M8 6h8v5H8z",

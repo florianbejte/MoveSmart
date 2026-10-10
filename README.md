@@ -224,3 +224,37 @@ batches to avoid ArcGIS transfer and URL-length limits.
 Transit markers, badges and selected route lines use GTFS `route_color`.
 Missing colours fall back to green express, blue regular bus, red trolleybus,
 black night bus, or teal L1. L1 colour support does not imply a live river feed.
+
+### Community crowding reports
+
+Use the map’s red report button or **Report crowding** in a vehicle’s details.
+Choose the exact bus and one of three levels, then explicitly send. Reports are
+anonymous, device-based community observations, separate from JUDU data. The
+latest condition is shown with the number of matching reports; reports expire
+after 15 minutes. A new report from the same device replaces its earlier vote
+on that vehicle/trip. Server validation requires a fresh, matching live trip,
+uses server timestamps and enforces a 30-second device cooldown.
+
+Development stores reports in the gitignored `apps/web/.local-reports/` directory.
+For production, set `REPORTS_DATA_DIR` to a writable **persistent** directory.
+This file-backed implementation supports a single Node server process. For
+multiple replicas or serverless deployment, replace the store with a shared
+transactional database before enabling reporting. Anonymous cookies provide basic
+repeat-submit protection, not verified riders or strong abuse prevention.
+Reporter IDs are never returned by the public API; precise rider location is not
+collected. API response failures are shown explicitly, never as saved reports.
+
+Run reporting tests with `bun test apps/web/src/lib/reports`.
+
+Stop details include a **Report issue** sheet for damaged shelters, blocked access,
+missing timetables, moved stops, and buses passing without boarding. Stop issues
+expire after 24 hours; passing-bus observations after 30 minutes and require a
+fresh vehicle serving that stop within 1 km. Confirmations refresh a report, with
+one vote per device and subject. Crowding is also shown beside live departures
+only when the vehicle and dated trip match.
+
+The independent purple **Community reports** layer groups issues at each stop
+and follows currently reporting buses. Hover for report age/count; select a marker
+to open details and confirm. Expired reports are removed from the map and panels.
+Stars save stops and routes under **Saved**, locally in this browser (not account
+synced). Reports are rider observations, not verified operator announcements.

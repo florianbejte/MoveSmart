@@ -1054,7 +1054,8 @@
 .city-map-popup {
 	z-index: 5;
 }
-.city-map-popup.is-preview {
+.city-map-popup.is-preview,
+.city-map-popup.is-preview .maplibregl-popup-content {
 	pointer-events: none;
 }
 .city-map-popup .maplibregl-popup-content {
