@@ -28,6 +28,27 @@ export const travelProfile = v.object({
 	weatherSensitive: v.boolean(),
 });
 
+export const place = v.object({
+	name: v.string(),
+	lat: v.number(),
+	lon: v.number(),
+});
+export const sharedLeg = v.object({
+	tripId: v.string(),
+	routeId: v.string(),
+	route: v.string(),
+	fromStop: v.string(),
+	toStop: v.string(),
+	departAt: v.number(),
+	arriveAt: v.number(),
+	delaySeconds: v.union(v.number(), v.null()),
+});
+export const sharedSegment = v.object({
+	kind: v.union(v.literal("walk"), v.literal("ride")),
+	color: v.string(),
+	coordinates: v.array(v.array(v.number())),
+});
+
 export default defineSchema({
 	// One travel profile per account, filled in by the onboarding questionnaire.
 	profiles: defineTable({
@@ -62,6 +83,36 @@ export default defineSchema({
 		updatedAt: v.number(),
 		expiresAt: v.number(),
 	}).index("by_expiry", ["expiresAt"]),
+	// Live trip sharing: anyone with the link sees the route, the buses and the sharer's position.
+	sharedTrips: defineTable({
+		shareId: v.string(),
+		// Only the sharer's device knows this; it's never returned by queries.
+		writeKey: v.string(),
+		name: v.optional(v.string()),
+		from: place,
+		to: place,
+		label: v.string(),
+		mode: v.string(),
+		departAt: v.number(),
+		arriveAt: v.number(),
+		legs: v.array(sharedLeg),
+		path: v.array(sharedSegment),
+		position: v.optional(
+			v.object({
+				lat: v.number(),
+				lon: v.number(),
+				accuracy: v.number(),
+				at: v.number(),
+			}),
+		),
+		status: v.union(
+			v.literal("active"),
+			v.literal("stopped"),
+			v.literal("arrived"),
+		),
+		createdAt: v.number(),
+		expiresAt: v.number(),
+	}).index("by_share", ["shareId"]),
 	// Green trips a user set off on, for their personal CO₂ savings.
 	greenTrips: defineTable({
 		userId: v.string(),

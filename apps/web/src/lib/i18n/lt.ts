@@ -848,8 +848,106 @@ export const lithuanian: Record<string, string> = {
 	"· saved or partial data": "· išsaugoti arba daliniai duomenys",
 	late: "vėluoja",
 	early: "anksčiau",
+	When: "Kada",
+	"Leave at": "Išvykti",
+	"Arrive by": "Atvykti iki",
+	"Ticket: 60-minute, €1.25": "Bilietas: 60 min., 1,25 €",
+	"Ticket: 30-minute, €1.00": "Bilietas: 30 min., 1,00 €",
+	"Changes are free while it’s valid. Buy in the m.Ticket or Trafi app, or just tap your contactless bank card on the validator on board.":
+		"Kol bilietas galioja, persėsti galima nemokamai. Pirkite programėlėse m.Ticket ar Trafi arba tiesiog pridėkite bekontaktę banko kortelę prie validatoriaus transporte.",
+	"All JUDU tickets": "Visi JUDU bilietai",
+	"Location is off — your friend still sees your route and your bus live.":
+		"Vietos nustatymas išjungtas — draugas vis tiek mato jūsų maršrutą ir autobusą realiu laiku.",
+	"Couldn’t start live sharing. Try again in a moment.":
+		"Nepavyko pradėti bendrinti kelionės. Pabandykite netrukus.",
+	"Sharing your trip live": "Kelionė bendrinama realiu laiku",
+	"Anyone with the link sees where you are until you stop.":
+		"Visi, turintys nuorodą, mato, kur esate, kol nesustabdysite.",
+	Copied: "Nukopijuota",
+	Link: "Nuoroda",
+	"Share your trip live?": "Bendrinti kelionę realiu laiku?",
+	"Anyone with the link sees your route, your bus and your live location — until you arrive or tap Stop. Keep this page open while you travel.":
+		"Visi, turintys nuorodą, mato jūsų maršrutą, autobusą ir buvimo vietą realiu laiku — kol atvyksite arba paspausite „Sustabdyti“. Kelionės metu laikykite šį puslapį atidarytą.",
+	"Start sharing": "Pradėti bendrinti",
+	"Just send the route": "Siųsti tik maršrutą",
+	"Share live trip": "Bendrinti kelionę gyvai",
+	"Link copied": "Nuoroda nukopijuota",
+	"Share this trip": "Bendrinti šią kelionę",
+	"Your trip, live": "Jūsų kelionė realiu laiku",
+	"Turn off trip alerts": "Išjungti kelionės priminimus",
+	"Alert me on this trip": "Priminti šios kelionės metu",
+	"Trip alerts on": "Kelionės priminimai įjungti",
+	"Alert me: leave, bus coming, get off":
+		"Priminti: išeiti, atvyksta autobusas, išlipti",
+	"Yellow warning": "Geltonas įspėjimas",
+	"Orange warning": "Oranžinis įspėjimas",
+	"Red warning": "Raudonas įspėjimas",
+	"You’ve arrived": "Atvykote",
+	"Walk the last bit to your destination. Have a good one!":
+		"Paeikite paskutinę atkarpą iki tikslo. Geros dienos!",
+	"Get ready to get off.": "Ruoškitės išlipti.",
+	"Loading map…": "Įkeliamas žemėlapis…",
+	"Loading the trip…": "Įkeliama kelionė…",
+	"This trip link doesn’t exist": "Tokios kelionės nuorodos nėra",
+	"It may have been mistyped. Ask for a new link.":
+		"Galbūt nuoroda neteisinga. Paprašykite naujos.",
+	"Open MoveSmart": "Atidaryti MoveSmart",
+	"Your friend": "Jūsų draugas",
+	"Trip sharing ended": "Kelionės bendrinimas baigtas",
+	"Live trip": "Kelionė gyvai",
+	Arrives: "Atvyks",
+	Arrived: "Atvyko",
+	"Travelling by": "Keliauja",
+	live: "gyvai",
+	"Plan your own trip with MoveSmart": "Suplanuokite savo kelionę su MoveSmart",
+	"signal may be lost": "galbūt dingo ryšys",
+	"Live location not shared yet — showing the planned route and the bus.":
+		"Vieta dar nebendrinama — rodomas suplanuotas maršrutas ir autobusas.",
 };
 export const templates: Record<string, string> = {
+	"Drive {0} km (~{1} min) to the Park & Ride lot at {2} and park for free":
+		"Nuvažiuokite {0} km (~{1} min.) iki „Statyk ir važiuok“ aikštelės {2} ir palikite automobilį nemokamai",
+	"{0} spaces": "{0} vietų",
+	"until {0}": "iki {0}",
+	"bus {0} min late": "autobusas vėluoja {0} min.",
+	"bus {0} min early": "autobusas atvyksta {0} min. anksčiau",
+	"Allow {0} min to get to {1}. Bus {2} leaves at {3} (live).":
+		"Skirkite {0} min. nuvykti iki stotelės {1}. Autobusas {2} išvyksta {3} (realiu laiku).",
+	"Allow {0} min to get to {1}. Bus {2} leaves at {3}.":
+		"Skirkite {0} min. nuvykti iki stotelės {1}. Autobusas {2} išvyksta {3}.",
+	"Start walking to {0}": "Eikite į stotelę {0}",
+	"Bus {0} leaves at {1} — in {2} min.":
+		"Autobusas {0} išvyksta {1} — po {2} min.",
+	"Bus {0} arrives in {1} min": "Autobusas {0} atvyks po {1} min.",
+	"Board at {0} towards your destination. {1} stops to {2}.":
+		"Įlipkite stotelėje {0}. Iki stotelės {2} — {1} stotelės.",
+	"Board at {0} towards your destination. {1} stop to {2}.":
+		"Įlipkite stotelėje {0}. Iki stotelės {2} — {1} stotelė.",
+	"On bus {0} — get off at {1}": "Autobusu {0} — išlipkite stotelėje {1}",
+	"Arriving {0}, in {1} min.": "Atvyksite {0}, po {1} min.",
+	"Your stop is next: {0}": "Kita stotelė — jūsų: {0}",
+	"Get ready to get off and change to bus {0}.":
+		"Ruoškitės išlipti ir persėsti į autobusą {0}.",
+	"Change to bus {0}": "Persėskite į autobusą {0}",
+	"Same stop — leaves at {0}, in {1} min.":
+		"Toje pačioje stotelėje — išvyksta {0}, po {1} min.",
+	"Walk to {0} — leaves at {1}, in {2} min.":
+		"Eikite į stotelę {0} — išvyksta {1}, po {2} min.",
+	"{0} is getting ready to leave": "{0} ruošiasi išeiti",
+	"{0} is walking to {1}": "{0} eina į stotelę {1}",
+	"{0} is waiting for bus {1} at {2}": "{0} laukia autobuso {1} stotelėje {2}",
+	"{0} is on bus {1}": "{0} važiuoja autobusu {1}",
+	"{0} is getting off at {1}": "{0} išlipa stotelėje {1}",
+	"{0} is changing to bus {1}": "{0} persėda į autobusą {1}",
+	"{0} is almost there": "{0} jau beveik atvyko",
+	"{0} has arrived": "{0} atvyko",
+	"{0} stopped sharing": "{0} nebebendrina kelionės",
+	"{0} is on the way": "{0} jau kelyje",
+	"{0} should have arrived": "{0} jau turėjo atvykti",
+	"Following {0}": "Sekama: {0}",
+	"Follow {0}": "Sekti: {0}",
+	"Location updated {0} s ago": "Vieta atnaujinta prieš {0} s",
+	"Location updated {0} min ago": "Vieta atnaujinta prieš {0} min.",
 	"Area: {0} m²": "Plotas: {0} m²",
 	"Save route {0}": "Išsaugoti maršrutą {0}",
 	"Saved route {0}": "Išsaugotas maršrutas {0}",
@@ -858,6 +956,8 @@ export const templates: Record<string, string> = {
 	"Route {0}": "Maršrutas {0}",
 	"route {0}": "maršrutas {0}",
 	"Leave in {0} min": "Išeikite po {0} min.",
+	"Leave at {0}": "Išeikite {0}",
+	"Arrive by {0}": "Atvykite iki {0}",
 	"Live: {0} min {1}": "Realiuoju laiku: {0} min. {1}",
 	"Change at {0}": "Persėdimas: {0}",
 	"Greener choice — only {0} min longer than by car":

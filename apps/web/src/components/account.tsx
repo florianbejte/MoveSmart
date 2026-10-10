@@ -2,6 +2,7 @@
 
 import { api } from "@MoveSmart/backend/convex/_generated/api";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { createContext, useContext, useEffect, useState } from "react";
 import type { Disruption } from "@/lib/plan/disruptions";
 import {
@@ -32,8 +33,24 @@ export type Account = {
 		at: { lat: number; lon: number },
 		note?: string,
 	) => Promise<boolean>;
+	liveShare: LiveShare;
 };
 export type AreaReportKind = "protest" | "event" | "blocked" | "emergency";
+export type LiveShareInput = FunctionArgs<typeof api.sharedTrips.create>;
+export type LiveShare = {
+	/** Start sharing; null when live sharing isn't available (no backend). */
+	start: (
+		trip: LiveShareInput,
+	) => Promise<{ shareId: string; writeKey: string } | null>;
+	update: (
+		share: { shareId: string; writeKey: string },
+		at: { lat: number; lon: number; accuracy: number },
+	) => Promise<boolean>;
+	stop: (
+		share: { shareId: string; writeKey: string },
+		arrived?: boolean,
+	) => Promise<void>;
+};
 export type Impact = { grams: number; trips: number };
 
 const AccountContext = createContext<Account | null>(null);
@@ -101,6 +118,11 @@ export function LocalAccountProvider({
 				logGreenTrip: impact.log,
 				areaReports: [],
 				reportArea: async () => false,
+				liveShare: {
+					start: async () => null,
+					update: async () => false,
+					stop: async () => {},
+				},
 				enabled: false,
 				status: "guest",
 				profile: local.profile,
@@ -144,6 +166,9 @@ export function ConvexAccountProvider({
 	}, []);
 	const areaRows = useQuery(api.areaReports.active, { now: minute });
 	const reportRemote = useMutation(api.areaReports.report);
+	const createShare = useMutation(api.sharedTrips.create);
+	const updateShare = useMutation(api.sharedTrips.updatePosition);
+	const stopShare = useMutation(api.sharedTrips.stop);
 	const status = auth.isLoading ? "loading" : signedIn ? "signed-in" : "guest";
 	return (
 		<AccountContext.Provider
@@ -192,6 +217,13 @@ export function ConvexAccountProvider({
 					if (!signedIn) return false;
 					await reportRemote({ kind, lat: at.lat, lon: at.lon, note });
 					return true;
+				},
+				liveShare: {
+					start: (trip) => createShare(trip),
+					update: (share, at) => updateShare({ ...share, ...at }),
+					stop: async (share, arrived) => {
+						await stopShare({ ...share, arrived });
+					},
 				},
 			}}
 		>

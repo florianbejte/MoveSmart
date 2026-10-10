@@ -1228,6 +1228,7 @@ export default function TransitExplorer() {
 					</div>
 					<TripPlanner
 						hidden={!planOpen}
+						vehicles={live.data?.vehicles ?? EMPTY_VEHICLES}
 						stops={stops}
 						routes={routeById}
 						origin={origin}

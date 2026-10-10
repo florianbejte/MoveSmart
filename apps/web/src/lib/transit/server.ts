@@ -425,12 +425,14 @@ export async function getRides(
 	to: Position,
 	walkPace = 75,
 	maxWalkMinutes = 20,
+	/** Plan from this time instead of now (live delays only apply near the present). */
+	at = Date.now(),
 ) {
 	const [data, feed] = await Promise.all([
 		getSchedule(),
 		getLive().catch(() => null),
 	]);
-	const now = Date.now();
+	const now = at;
 	const [access, egress] = await Promise.all([
 		walkingAccess(from, data.network.stops, walkPace, maxWalkMinutes),
 		walkingAccess(to, data.network.stops, walkPace, maxWalkMinutes, true),

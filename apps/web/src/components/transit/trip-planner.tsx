@@ -22,14 +22,16 @@ import {
 	Pencil,
 	Radio,
 	Search,
+	Share2,
 	Sparkles,
+	Ticket,
 	TriangleAlert,
 	Users,
 	X,
 	Zap,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { placeKindLabel } from "@/lib/i18n/core";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { dateLocale, placeKindLabel } from "@/lib/i18n/core";
 import { useT } from "@/lib/i18n/react";
 import {
 	DISRUPTION_INFO,
@@ -44,6 +46,7 @@ import {
 	type Mode,
 	type RankedOption,
 	rankOptions,
+	ticket,
 	type Weather,
 	type Weights,
 	weightsFor,
@@ -54,8 +57,18 @@ import { bookingLink, type Quote } from "@/lib/plan/providers";
 import type { TransitRide } from "@/lib/plan/transit";
 import { distance } from "@/lib/transit/core";
 import { serviceColor } from "@/lib/transit/service-colors";
-import type { Position, Stop, TransitRoute } from "@/lib/transit/types";
-import { type AreaReportKind, useAccount } from "../account";
+import type {
+	Position,
+	Stop,
+	TransitRoute,
+	Vehicle,
+} from "@/lib/transit/types";
+import {
+	type AreaReportKind,
+	type LiveShareInput,
+	useAccount,
+} from "../account";
+import { TripCompanion } from "./companion";
 import { FormulaDetails } from "./formula";
 import { useTransit } from "./use-transit";
 
@@ -125,6 +138,11 @@ type PlanResponse = {
 	rides: NamedRide[];
 	transfers?: { legs: [NamedRide, NamedRide] }[];
 	disruptions?: Disruption[];
+	parkRide?: {
+		lot: { name: string; lat: number; lon: number; spaces: number | null };
+		driveKm: number;
+		ride: NamedRide;
+	}[];
 	stale: boolean;
 	walkingApproximate?: boolean;
 	generatedAt: number;
@@ -149,6 +167,7 @@ const fold = (s: string) =>
 /** Door-to-door comparison of every way to get there, ranked for the rider's profile. */
 export function TripPlanner({
 	hidden,
+	vehicles,
 	stops,
 	routes,
 	origin,
@@ -164,6 +183,7 @@ export function TripPlanner({
 	now,
 }: {
 	hidden: boolean;
+	vehicles: Vehicle[];
 	stops: Stop[];
 	routes: Map<string, TransitRoute>;
 	origin: Position;
@@ -226,15 +246,68 @@ export function TripPlanner({
 	const [showMore, setShowMore] = useState(false);
 	const [maxWalk, setMaxWalk] = useState(20);
 	const [showExcluded, setShowExcluded] = useState(false);
+	// The route currently drawn on the map, reused when sharing the trip live.
+	const lastPath = useRef<PlanPath | null>(null);
+	const emitPath = (path: PlanPath | null) => {
+		lastPath.current = path;
+		onPath(path);
+	};
+	// A shared trip link (?to=…&from=…&at=…) opens the same plan.
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const read = (key: string): Place | null => {
+			const [lat, lon, ...name] = (params.get(key) ?? "").split(",");
+			const p = {
+				lat: Number(lat),
+				lon: Number(lon),
+				name: decodeURIComponent(name.join(",")),
+			};
+			return Number.isFinite(p.lat) &&
+				Number.isFinite(p.lon) &&
+				p.lat > 54 &&
+				p.lat < 55.5
+				? { ...p, name: p.name || "Shared place" }
+				: null;
+		};
+		const sharedTo = read("to");
+		if (!sharedTo) return;
+		const sharedFrom = read("from");
+		if (sharedFrom) {
+			setFromPlace(sharedFrom);
+			setStart(sharedFrom);
+		}
+		const at = Number(params.get("at"));
+		const mode = params.get("when");
+		if (at > Date.now() && (mode === "depart" || mode === "arrive"))
+			setWhen({ mode, at });
+		setTo(sharedTo);
+	}, []);
 	const toSearch = usePlaceSearch(query, stops);
 	const fromSearch = usePlaceSearch(fromQuery, stops);
 	const from = {
 		lat: Math.round(start.lat * 2000) / 2000,
 		lon: Math.round(start.lon * 2000) / 2000,
 	};
+	// When: leave now, leave at a time, or arrive by a time.
+	const [when, setWhen] = useState<{
+		mode: "now" | "depart" | "arrive";
+		at: number;
+	}>(() => ({
+		mode: "now",
+		at: Math.ceil(Date.now() / 300_000) * 300_000 + 900_000,
+	}));
+	// "Arrive by" starts searching about one bus trip before the deadline, so you arrive
+	// shortly before it rather than an hour early (~4 min per km plus walking and waiting).
+	const tripKm = to ? distance(start, to) / 1000 : 0;
+	const searchAt =
+		when.mode === "depart"
+			? when.at
+			: when.mode === "arrive"
+				? when.at - Math.round(tripKm * 4 + 30) * 60_000
+				: null;
 	const planUrl =
 		to && !hidden
-			? `/api/plan?from=${from.lat},${from.lon}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}&pace=${walkPace(profile)}&walk=${maxWalk}`
+			? `/api/plan?from=${from.lat},${from.lon}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}&pace=${walkPace(profile)}&walk=${maxWalk}${profile.hasCar ? "&car=1" : ""}${searchAt ? `&at=${Math.max(Date.now(), searchAt)}` : ""}`
 			: null;
 	const plan = useTransit<PlanResponse>(planUrl, 60_000);
 	const conditions = useTransit<{
@@ -249,15 +322,34 @@ export function TripPlanner({
 	);
 	const { ranked, impact } = useMemo(() => {
 		if (!to || !plan.data) return { ranked: [], impact: null };
-		const options = estimateOptions({
+		const planNow =
+			when.mode === "now"
+				? plan.data.generatedAt
+				: Math.max(plan.data.generatedAt, searchAt ?? 0);
+		let options = estimateOptions({
 			from: start,
 			to,
-			now: plan.data.generatedAt,
+			now: planNow,
+			leaveJustInTime: when.mode === "arrive",
 			rides: plan.data.rides,
 			transfers: plan.data.transfers,
+			parkRide: plan.data.parkRide,
 			routeName: (id) => routes.get(id)?.name ?? "",
 			profile,
 		});
+		if (when.mode === "arrive")
+			// Only trips that make the deadline; other modes leave just in time to arrive at it.
+			options = options
+				.filter((o) => o.mode !== "transit" || o.arriveAt <= when.at)
+				.map((o) =>
+					o.mode === "transit"
+						? o
+						: {
+								...o,
+								departAt: when.at - o.minutes * 60_000,
+								arriveAt: when.at,
+							},
+				);
 		const impact = tripImpact(
 			{ from: start, to },
 			options,
@@ -289,6 +381,8 @@ export function TripPlanner({
 		routes,
 		disruptions,
 		stops,
+		when,
+		searchAt,
 	]);
 	const usable = ranked.filter((o) => !o.excluded);
 	const filteredOptions = usable.filter(
@@ -308,6 +402,7 @@ export function TripPlanner({
 	for (const r of [
 		...(plan.data?.rides ?? []),
 		...(plan.data?.transfers ?? []).flatMap((t) => t.legs),
+		...(plan.data?.parkRide ?? []).map((p) => p.ride),
 	])
 		named.set(legKey(r), r);
 	const excluded = ranked.filter((o) => o.excluded);
@@ -341,7 +436,7 @@ export function TripPlanner({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: selectedKey identifies the option and endpoints.
 	useEffect(() => {
 		if (hidden || !selected || !to) {
-			onPath(null);
+			emitPath(null);
 			return;
 		}
 		const controller = new AbortController();
@@ -363,7 +458,7 @@ export function TripPlanner({
 				);
 				// Walks: to the first stop, between stops when changing, and to the destination.
 				const walkPoints: [Position, Position][] = [
-					[start, ends[0][0] as Stop],
+					[selected.via ?? start, ends[0][0] as Stop],
 					...legs
 						.slice(1)
 						.map(
@@ -383,6 +478,12 @@ export function TripPlanner({
 					),
 				);
 				const segments: PlanPath["segments"] = [];
+				if (selected.via)
+					segments.push({
+						kind: "ride",
+						color: PATH_COLORS.car,
+						coordinates: await streetPath("car", start, selected.via, signal),
+					});
 				legs.forEach((l, i) => {
 					const [board, alight] = ends[i] as [Stop, Stop];
 					const route = routes.get(l.routeId);
@@ -407,7 +508,7 @@ export function TripPlanner({
 					color: PATH_COLORS.walk,
 					coordinates: walks[legs.length],
 				});
-				onPath({
+				emitPath({
 					key: selectedKey,
 					from: start,
 					to,
@@ -424,7 +525,7 @@ export function TripPlanner({
 				to,
 				signal,
 			);
-			onPath({
+			emitPath({
 				key: selectedKey,
 				from: start,
 				to,
@@ -519,7 +620,7 @@ export function TripPlanner({
 									setTo(null);
 									setQuery("");
 									setGoing(null);
-									onPath(null);
+									emitPath(null);
 								}}
 								aria-label={t("Change destination")}
 							>
@@ -539,6 +640,13 @@ export function TripPlanner({
 					)}
 				</div>
 			</div>
+			<WhenPicker
+				when={when}
+				onChange={(w) => {
+					setWhen(w);
+					setGoing(null);
+				}}
+			/>
 			<details className="journey-settings">
 				<summary>
 					{t("Options")}
@@ -720,6 +828,55 @@ export function TripPlanner({
 							{t("All options")}
 						</button>
 					)}
+					{selected && to && (
+						<LiveShare
+							option={selected}
+							from={
+								fromPlace ?? {
+									name: usingLocation ? "My location" : "Start",
+									...start,
+								}
+							}
+							to={to}
+							when={when}
+							path={() => lastPath.current}
+							legs={(selected.legs ?? []).map((l) => {
+								const n = named.get(legKey(l));
+								return {
+									tripId: l.tripId,
+									routeId: l.routeId,
+									route: routes.get(l.routeId)?.name ?? "",
+									fromStop: n?.fromStop ?? "",
+									toStop: n?.toStop ?? "",
+									departAt: l.departAt,
+									arriveAt: l.arriveAt,
+									delaySeconds: l.delaySeconds ?? null,
+								};
+							})}
+						/>
+					)}
+					{!!selected?.legs?.length && (
+						<TripCompanion
+							legs={selected.legs.map((l) => {
+								const n = named.get(legKey(l));
+								return {
+									...l,
+									fromStop: n?.fromStop ?? "your stop",
+									toStop: n?.toStop ?? "your stop",
+									route: routes.get(l.routeId)?.name ?? "",
+								};
+							})}
+							walkMinutes={
+								(selected.via ? selected.via.driveMinutes + 3 : 0) +
+								(selected.legs[0].walkToMinutes ??
+									Math.round(
+										(selected.legs[0].walkToMetres * 1.25) / walkPace(profile),
+									))
+							}
+							vehicles={vehicles}
+							now={now}
+						/>
+					)}
 					{!selected && (
 						<div className="journey-list-heading">
 							<h3>
@@ -729,7 +886,13 @@ export function TripPlanner({
 										: "Ways to go",
 								)}
 							</h3>
-							<span>{t("Leave now")}</span>
+							<span>
+								{when.mode === "now"
+									? t("Leave now")
+									: t(
+											`${when.mode === "depart" ? "Leave at" : "Arrive by"} ${dayTime(when.at)}`,
+										)}
+							</span>
 						</div>
 					)}
 					{!selected && !filteredOptions.length && (
@@ -880,7 +1043,7 @@ function OptionCard({
 	const Icon = ICONS[o.mode];
 	const ride = legs?.[0];
 	const change = legs && legs.length > 1 ? legs[1] : undefined;
-	const leaveIn = Math.round((o.departAt - now) / 60_000);
+
 	const top = o.quotes?.find((q) => q.price !== null);
 	if (!expanded && !going)
 		return (
@@ -951,9 +1114,7 @@ function OptionCard({
 						<span>
 							{ride ? (
 								<>
-									<strong>
-										{t(leaveIn <= 0 ? "Leave now" : `Leave in ${leaveIn} min`)}
-									</strong>
+									<strong>{t(leaveLabel(o.departAt, now))}</strong>
 									{ride.live && <Radio size={12} />}
 								</>
 							) : (
@@ -1040,7 +1201,7 @@ function OptionCard({
 				{o.mode === "transit" && !o.estimated && (
 					<span className={ride?.live ? "live" : ""}>
 						{ride?.live && <Radio size={11} />}
-						{t(leaveIn <= 0 ? "Leave now" : `Leave in ${leaveIn} min`)}
+						{t(leaveLabel(o.departAt, now))}
 					</span>
 				)}
 				{o.parts.walk > 0 && (
@@ -1083,7 +1244,9 @@ function OptionCard({
 				)}
 			</div>
 
-			{legs && legs.length > 0 && <Itinerary legs={legs} routes={routes} />}
+			{legs && legs.length > 0 && (
+				<Itinerary legs={legs} routes={routes} via={o.via} />
+			)}
 			{o.reasons.length > 0 && (
 				<ul className="plan-reasons">
 					{o.reasons.slice(0, best || going ? 4 : 2).map((r) => (
@@ -1124,6 +1287,15 @@ function OptionCard({
 						" CO₂. Next time, try the bus — it’s part of how Vilnius gets cleaner.",
 					)}
 				</p>
+			)}
+			{going && o.mode === "transit" && o.cost > 0 && (
+				<TicketInfo
+					price={
+						o.legs?.length
+							? ticket(o.legs[0].departAt, o.legs[o.legs.length - 1].arriveAt)
+							: 1
+					}
+				/>
 			)}
 			{o.quotes && going && (
 				<Providers quotes={o.quotes} mode={o.mode} trip={trip} />
@@ -1230,14 +1402,27 @@ const metres = (m: number) =>
 function Itinerary({
 	legs,
 	routes,
+	via,
 }: {
 	legs: NamedRide[];
 	routes: Map<string, TransitRoute>;
+	via?: RankedOption["via"];
 }) {
 	const t = useT();
 
 	return (
 		<ol className="itinerary">
+			{via && (
+				<li className="step-walk">
+					<Car size={14} />
+					<span>
+						{t(
+							`Drive ${via.driveKm} km (~${via.driveMinutes} min) to the Park & Ride lot at ${via.name} and park for free`,
+						)}
+						{via.spaces ? ` · ${t(`${via.spaces} spaces`)}` : ""}
+					</span>
+				</li>
+			)}
 			<li className="step-walk">
 				<Footprints size={14} />
 				<span>
@@ -1661,6 +1846,15 @@ function TripConditions({
 					</dt>
 					<dd>
 						{weather ? weatherText(weather) : "Unavailable"}
+						{weather?.warning && (
+							<span className={`weather-warning-chip ${weather.warning.level}`}>
+								{t(
+									`${weather.warning.level[0].toUpperCase()}${weather.warning.level.slice(1)} warning`,
+								)}{" "}
+								· {weather.warning.event} ·{" "}
+								{t(`until ${time.format(weather.warning.until)}`)}
+							</span>
+						)}
 						<small>
 							{weights.m > 1
 								? `Walking & cycling count ${weights.m}× (${weights.weather.join(", ")})`
@@ -1727,5 +1921,357 @@ function TripConditions({
 				{t(" · delay η")} {weights.eta}
 			</p>
 		</section>
+	);
+}
+
+// Day names follow the interface language (Lithuanian or English).
+const dayFormat = () =>
+	new Intl.DateTimeFormat(dateLocale(), {
+		timeZone: "Europe/Vilnius",
+		weekday: "short",
+		day: "numeric",
+		month: "short",
+	});
+/** "17:40", or "Mon 12 Oct 17:40" when it isn't today. */
+function dayTime(at: number) {
+	const format = dayFormat();
+	const sameDay = format.format(at) === format.format(Date.now());
+	return sameDay ? time.format(at) : `${format.format(at)} ${time.format(at)}`;
+}
+function leaveLabel(departAt: number, now: number) {
+	const min = Math.round((departAt - now) / 60_000);
+	if (min <= 0) return "Leave now";
+	if (min < 60) return `Leave in ${min} min`;
+	return `Leave at ${dayTime(departAt)}`;
+}
+/** Value for <input type="datetime-local"> in Vilnius time. */
+function toLocalInput(at: number) {
+	const p = Object.fromEntries(
+		new Intl.DateTimeFormat("en-CA", {
+			timeZone: "Europe/Vilnius",
+			year: "numeric",
+			month: "2-digit",
+			day: "2-digit",
+			hour: "2-digit",
+			minute: "2-digit",
+			hourCycle: "h23",
+		})
+			.formatToParts(at)
+			.map((x) => [x.type, x.value]),
+	);
+	return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+/** Vilnius wall-clock "YYYY-MM-DDTHH:mm" to a timestamp (handles summer time). */
+function fromLocalInput(value: string) {
+	const guess = Date.parse(`${value}:00Z`);
+	if (!Number.isFinite(guess)) return null;
+	const shown = Date.parse(`${toLocalInput(guess)}:00Z`);
+	return guess - (shown - guess);
+}
+
+function WhenPicker({
+	when,
+	onChange,
+}: {
+	when: { mode: "now" | "depart" | "arrive"; at: number };
+	onChange: (when: { mode: "now" | "depart" | "arrive"; at: number }) => void;
+}) {
+	const t = useT();
+	return (
+		<div className="when-picker">
+			<fieldset aria-label={t("When")}>
+				{(
+					[
+						["now", "Leave now"],
+						["depart", "Leave at"],
+						["arrive", "Arrive by"],
+					] as const
+				).map(([mode, label]) => (
+					<button
+						type="button"
+						key={mode}
+						aria-pressed={when.mode === mode}
+						onClick={() =>
+							onChange({
+								mode,
+								at: Math.max(
+									when.at,
+									Math.ceil(Date.now() / 300_000) * 300_000 + 900_000,
+								),
+							})
+						}
+					>
+						{t(label)}
+					</button>
+				))}
+			</fieldset>
+			{when.mode !== "now" && (
+				<input
+					type="datetime-local"
+					aria-label={t(when.mode === "depart" ? "Leave at" : "Arrive by")}
+					step={300}
+					min={toLocalInput(Date.now())}
+					value={toLocalInput(when.at)}
+					onChange={(e) => {
+						const at = fromLocalInput(e.target.value);
+						if (at) onChange({ ...when, at });
+					}}
+				/>
+			)}
+		</div>
+	);
+}
+
+/** How to pay for the bus: price for this trip and the official ways to buy. */
+function TicketInfo({ price }: { price: number }) {
+	const t = useT();
+	const long = price > 1;
+	return (
+		<div className="ticket-info">
+			<Ticket size={16} />
+			<div>
+				<strong>
+					{t(long ? "Ticket: 60-minute, €1.25" : "Ticket: 30-minute, €1.00")}
+				</strong>
+				<small>
+					{t(
+						"Changes are free while it’s valid. Buy in the m.Ticket or Trafi app, or just tap your contactless bank card on the validator on board.",
+					)}
+				</small>
+				<span className="ticket-links">
+					<a href="https://www.trafi.com/" target="_blank" rel="noreferrer">
+						{"Trafi"} <ExternalLink size={12} />
+					</a>
+					<a
+						href="https://judu.lt/viesojo-transporto-keleiviams/bilietu-rusys-ir-kainos-3/"
+						target="_blank"
+						rel="noreferrer"
+					>
+						{t("All JUDU tickets")} <ExternalLink size={12} />
+					</a>
+				</span>
+			</div>
+		</div>
+	);
+}
+
+/** Keep shared routes small: at most ~300 points per segment. */
+function simplify(coords: [number, number][]) {
+	const step = Math.max(1, Math.ceil(coords.length / 300));
+	return coords.filter((_, i) => i % step === 0 || i === coords.length - 1);
+}
+
+type ActiveShare = { shareId: string; writeKey: string; url: string };
+const SHARE_KEY = "movesmart-live-share";
+
+/**
+ * Share the trip live: friends open a page that shows the route, the bus and where you are
+ * now, until you arrive or stop. Falls back to a route-only link without a backend.
+ */
+function LiveShare({
+	option,
+	from,
+	to,
+	when,
+	path,
+	legs,
+}: {
+	option: RankedOption;
+	from: Place;
+	to: Place;
+	when: { mode: "now" | "depart" | "arrive"; at: number };
+	path: () => PlanPath | null;
+	legs: LiveShareInput["legs"];
+}) {
+	const account = useAccount();
+	const t = useT();
+	const [asking, setAsking] = useState(false);
+	const [share, setShare] = useState<ActiveShare | null>(null);
+	const [note, setNote] = useState<string | null>(null);
+	const [copied, setCopied] = useState(false);
+	// Resume a share after a reload in the same tab.
+	useEffect(() => {
+		try {
+			const saved = sessionStorage.getItem(SHARE_KEY);
+			if (saved) setShare(JSON.parse(saved));
+		} catch {}
+	}, []);
+	// Send the position while sharing; the page must stay open (no background tracking).
+	useEffect(() => {
+		if (!share || !navigator.geolocation) return;
+		let last = 0;
+		const watch = navigator.geolocation.watchPosition(
+			async (pos) => {
+				if (Date.now() - last < 8_000) return;
+				last = Date.now();
+				const ok = await account.liveShare
+					.update(share, {
+						lat: pos.coords.latitude,
+						lon: pos.coords.longitude,
+						accuracy: pos.coords.accuracy,
+					})
+					.catch(() => true);
+				if (!ok) end();
+			},
+			() =>
+				setNote(
+					t(
+						"Location is off — your friend still sees your route and your bus live.",
+					),
+				),
+			{ enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
+		);
+		return () => navigator.geolocation.clearWatch(watch);
+		// biome-ignore lint/correctness/useExhaustiveDependencies: restart only for a new share.
+	}, [share?.shareId]);
+	function end() {
+		try {
+			sessionStorage.removeItem(SHARE_KEY);
+		} catch {}
+		setShare(null);
+	}
+	async function send(url: string, text: string) {
+		try {
+			if (navigator.share) {
+				await navigator.share({ title: "My trip · MoveSmart", text, url });
+				return;
+			}
+			await navigator.clipboard.writeText(`${text} ${url}`);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2500);
+		} catch {
+			// The share sheet was closed.
+		}
+	}
+	const summary = `${option.label}, arriving ${time.format(option.arriveAt)}`;
+	async function start() {
+		setAsking(false);
+		const drawn = path();
+		// Only the fields the backend accepts: saved places carry extras like a use count.
+		const pick = (p: Place) => ({
+			name: p.name || "Place",
+			lat: p.lat,
+			lon: p.lon,
+		});
+		const created = await account.liveShare
+			.start({
+				from: pick(from),
+				to: pick(to),
+				label: option.label,
+				mode: option.mode,
+				departAt: option.departAt,
+				arriveAt: option.arriveAt,
+				legs,
+				path: (drawn?.segments ?? [])
+					.filter((s) => s.coordinates.length > 1)
+					.map((s) => ({ ...s, coordinates: simplify(s.coordinates) })),
+			})
+			.catch((error) => {
+				console.error("Live sharing failed", error);
+				return null;
+			});
+		if (!created) {
+			setNote(t("Couldn’t start live sharing. Try again in a moment."));
+			return;
+		}
+		const active = {
+			...created,
+			url: `${window.location.origin}/trip/${created.shareId}`,
+		};
+		try {
+			sessionStorage.setItem(SHARE_KEY, JSON.stringify(active));
+		} catch {}
+		setShare(active);
+		await send(active.url, `Follow my trip live to ${to.name}: ${summary}.`);
+	}
+	function routeLink() {
+		const place = (p: Place) =>
+			`${p.lat.toFixed(5)},${p.lon.toFixed(5)},${encodeURIComponent(p.name)}`;
+		const url = new URL("/", window.location.origin);
+		url.searchParams.set("to", place(to));
+		url.searchParams.set("from", place(from));
+		if (when.mode !== "now") {
+			url.searchParams.set("when", when.mode);
+			url.searchParams.set("at", String(when.at));
+		}
+		return url.href;
+	}
+	if (share)
+		return (
+			<div className="live-share active" role="status">
+				<span className="live-dot" />
+				<div>
+					<strong>{t("Sharing your trip live")}</strong>
+					<small>
+						{note ??
+							t("Anyone with the link sees where you are until you stop.")}
+					</small>
+				</div>
+				<button
+					type="button"
+					onClick={() => send(share.url, `Follow my trip live to ${to.name}.`)}
+				>
+					<Share2 size={14} />
+					{t(copied ? "Copied" : "Link")}
+				</button>
+				<button
+					type="button"
+					className="stop"
+					onClick={async () => {
+						await account.liveShare.stop(share).catch(() => {});
+						end();
+					}}
+				>
+					{t("Stop")}
+				</button>
+			</div>
+		);
+	return (
+		<div className="live-share">
+			{asking ? (
+				<div className="live-share-consent">
+					<strong>{t("Share your trip live?")}</strong>
+					<p>
+						{t(
+							"Anyone with the link sees your route, your bus and your live location — until you arrive or tap Stop. Keep this page open while you travel.",
+						)}
+					</p>
+					<div>
+						<button type="button" className="primary" onClick={start}>
+							{t("Start sharing")}
+						</button>
+						<button
+							type="button"
+							onClick={() => {
+								setAsking(false);
+								void send(routeLink(), `My trip to ${to.name}: ${summary}.`);
+							}}
+						>
+							{t("Just send the route")}
+						</button>
+					</div>
+				</div>
+			) : (
+				<button
+					type="button"
+					className="share-trip"
+					onClick={() =>
+						account.enabled
+							? setAsking(true)
+							: void send(routeLink(), `My trip to ${to.name}: ${summary}.`)
+					}
+				>
+					<Share2 size={15} />
+					{t(
+						account.enabled
+							? "Share live trip"
+							: copied
+								? "Link copied"
+								: "Share this trip",
+					)}
+				</button>
+			)}
+			{note && !share && <p className="helper-text">{note}</p>}
+		</div>
 	);
 }

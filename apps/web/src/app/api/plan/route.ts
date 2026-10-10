@@ -1,4 +1,5 @@
 import { officialDisruptions } from "@/lib/plan/official-disruptions";
+import { parkRideTrips } from "@/lib/plan/park-ride";
 import { getWeather } from "@/lib/plan/weather";
 import { getRides } from "@/lib/transit/server";
 
@@ -16,6 +17,11 @@ export async function GET(request: Request) {
 	const to = point(params.get("to"));
 	const maxWalk = Math.min(30, Math.max(5, Number(params.get("walk")) || 20));
 	const pace = Number(params.get("pace")) || 75;
+	// Optional planned time: from now up to a week ahead.
+	const at = Math.min(
+		Date.now() + 7 * 86_400_000,
+		Math.max(Date.now(), Number(params.get("at")) || Date.now()),
+	);
 	if (!from || !to)
 		return Response.json(
 			{ error: "Give from and to as lat,lon inside Vilnius." },
@@ -33,13 +39,23 @@ export async function GET(request: Request) {
 				{ headers: { "Cache-Control": "no-store" } },
 			);
 		}
-		const transit = await getRides(
-			from,
-			to,
-			Math.min(90, Math.max(40, pace)),
-			maxWalk,
+		const [transit, parkRide] = await Promise.all([
+			getRides(from, to, Math.min(90, Math.max(40, pace)), maxWalk, at),
+			// Park & Ride only for riders with a car.
+			params.get("car") === "1"
+				? parkRideTrips(
+						from,
+						to,
+						Math.min(90, Math.max(40, pace)),
+						maxWalk,
+						at,
+					).catch(() => [])
+				: [],
+		]);
+		return Response.json(
+			{ ...transit, parkRide },
+			{ headers: { "Cache-Control": "no-store" } },
 		);
-		return Response.json(transit, { headers: { "Cache-Control": "no-store" } });
 	} catch (error) {
 		console.error(
 			"Trip planning unavailable",

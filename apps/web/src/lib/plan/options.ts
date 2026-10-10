@@ -18,6 +18,12 @@ export type Weather = {
 	precipitation: number;
 	windGust: number;
 	condition: string;
+	/** Official LHMT warning for Vilnius county (via MeteoAlarm), if one is active now. */
+	warning?: {
+		level: "yellow" | "orange" | "red";
+		event: string;
+		until: number;
+	};
 };
 export type TripOption = {
 	id: string;
@@ -32,6 +38,15 @@ export type TripOption = {
 	arriveAt: number;
 	estimated: boolean;
 	ride?: TransitRide;
+	/** Park & Ride: drive to this lot and park first, then take the bus. */
+	via?: {
+		name: string;
+		lat: number;
+		lon: number;
+		driveMinutes: number;
+		driveKm: number;
+		spaces: number | null;
+	};
 	/** Every bus of a public transport trip in order: one for a direct ride, two with a change. */
 	legs?: TransitRide[];
 	/** Closures, incidents or rider-reported trouble on the way, and the minutes they likely add. */
@@ -92,8 +107,12 @@ const CAR_MODES: Mode[] = ["car", "taxi", "carshare"];
 const CENTRE = { lat: 54.6872, lon: 25.2797 };
 const WALK_DETOUR = 1.25;
 const ROAD_DETOUR = 1.35;
+// JUDU single tickets (judu.lt, from 1 July 2025); transfers are free within the time.
 const TICKET_30 = 1;
-const TICKET_60 = 1.5;
+const TICKET_60 = 1.25;
+/** A ticket is validated on boarding, so its length depends on time on the buses only. */
+export const ticket = (boardAt: number, offAt: number) =>
+	offAt - boardAt > 30 * 60_000 ? TICKET_60 : TICKET_30;
 const CAR_EUR_KM = 0.13;
 const CAR_CO2_KM = 165;
 const BUS_CO2_KM = 50;
@@ -144,15 +163,30 @@ export function weatherFactor(w: Weather | null, sensitive = false) {
 		extra += 0.15;
 		reasons.push("strong wind");
 	}
+	// An official warning means conditions are worse than the hourly forecast suggests.
+	if (w.warning) {
+		extra += { yellow: 0.1, orange: 0.3, red: 0.6 }[w.warning.level];
+		reasons.push(
+			`${w.warning.level} warning: ${w.warning.event.toLowerCase()}`,
+		);
+	}
 	return { factor: 1 + extra * (sensitive ? 2 : 1), reasons };
 }
 
 export function estimateOptions(input: {
+	/** "Arrive by": the rider leaves just in time, so no waiting at the first stop. */
+	leaveJustInTime?: boolean;
 	from: Position;
 	to: Position;
 	now: number;
 	rides: TransitRide[];
 	transfers?: TransferTrip[];
+	/** Park & Ride candidates: lot, driving distance and the best bus from it. */
+	parkRide?: {
+		lot: { name: string; lat: number; lon: number; spaces: number | null };
+		driveKm: number;
+		ride: TransitRide;
+	}[];
 	routeName: (routeId: string) => string;
 	profile: Profile;
 }): TripOption[] {
@@ -223,20 +257,21 @@ export function estimateOptions(input: {
 		const walk =
 			(ride.walkToMinutes ?? walkMin(ride.walkToMetres)) +
 			(ride.walkFromMinutes ?? walkMin(ride.walkFromMetres));
-		const wait = Math.max(
-			0,
-			minutes(ride.departAt - now) -
-				(ride.walkToMinutes ?? walkMin(ride.walkToMetres)),
-		);
+		const wait = input.leaveJustInTime
+			? 0
+			: Math.max(
+					0,
+					minutes(ride.departAt - now) -
+						(ride.walkToMinutes ?? walkMin(ride.walkToMetres)),
+				);
 		const rideMin = minutes(ride.arriveAt - ride.departAt);
-		const total = walk + wait + rideMin;
 		options.push({
 			...option({
 				id: `transit-${ride.tripId}-${ride.fromStopId}-${ride.toStopId}-${Math.floor(ride.departAt / 86400000)}`,
 				mode: "transit",
 				label: `Route ${input.routeName(ride.routeId)}`,
 				parts: { walk, wait, ride: rideMin, park: 0 },
-				cost: profile.hasPass ? 0 : total > 30 ? TICKET_60 : TICKET_30,
+				cost: profile.hasPass ? 0 : ticket(ride.departAt, ride.arriveAt),
 				co2: Math.round((rideMin / 60) * 18 * BUS_CO2_KM),
 				estimated: false,
 				ride,
@@ -252,6 +287,10 @@ export function estimateOptions(input: {
 			departAt:
 				ride.departAt -
 				((ride.walkToMinutes ?? walkMin(ride.walkToMetres)) + 1) * 60_000,
+			// Door-to-door arrival: off the bus, then the walk.
+			arriveAt:
+				ride.arriveAt +
+				(ride.walkFromMinutes ?? walkMin(ride.walkFromMetres)) * 60_000,
 		});
 	}
 	for (const { legs } of input.transfers ?? []) {
@@ -262,11 +301,13 @@ export function estimateOptions(input: {
 				? (second.walkToMinutes ?? walkMin(second.walkToMetres))
 				: 0) +
 			(second.walkFromMinutes ?? walkMin(second.walkFromMetres));
-		const startWait = Math.max(
-			0,
-			minutes(first.departAt - now) -
-				(first.walkToMinutes ?? walkMin(first.walkToMetres)),
-		);
+		const startWait = input.leaveJustInTime
+			? 0
+			: Math.max(
+					0,
+					minutes(first.departAt - now) -
+						(first.walkToMinutes ?? walkMin(first.walkToMetres)),
+				);
 		const changeWait = Math.max(
 			0,
 			minutes(second.departAt - first.arriveAt) -
@@ -277,7 +318,6 @@ export function estimateOptions(input: {
 		const rideMin =
 			minutes(first.arriveAt - first.departAt) +
 			minutes(second.arriveAt - second.departAt);
-		const total = walk + startWait + changeWait + rideMin;
 		const live = legs.find((l) => l.live);
 		options.push({
 			...option({
@@ -285,7 +325,7 @@ export function estimateOptions(input: {
 				mode: "transit",
 				label: `Route ${input.routeName(first.routeId)} + ${input.routeName(second.routeId)}`,
 				parts: { walk, wait: startWait + changeWait, ride: rideMin, park: 0 },
-				cost: profile.hasPass ? 0 : total > 30 ? TICKET_60 : TICKET_30,
+				cost: profile.hasPass ? 0 : ticket(first.departAt, second.arriveAt),
 				co2: Math.round((rideMin / 60) * 18 * BUS_CO2_KM),
 				estimated: false,
 				ride: first,
@@ -297,6 +337,47 @@ export function estimateOptions(input: {
 			departAt:
 				first.departAt -
 				((first.walkToMinutes ?? walkMin(first.walkToMetres)) + 1) * 60_000,
+			arriveAt:
+				second.arriveAt +
+				(second.walkFromMinutes ?? walkMin(second.walkFromMetres)) * 60_000,
+		});
+	}
+	for (const { lot, driveKm, ride } of input.parkRide ?? []) {
+		const driveMinutes = Math.max(
+			3,
+			Math.round((driveKm / (rushHour(now) ? 17 : 25)) * 60),
+		);
+		const walkTo = ride.walkToMinutes ?? walkMin(ride.walkToMetres);
+		const walkFrom = ride.walkFromMinutes ?? walkMin(ride.walkFromMetres);
+		const leave = ride.departAt - (walkTo + 3 + driveMinutes + 1) * 60_000;
+		const wait = input.leaveJustInTime ? 0 : Math.max(0, minutes(leave - now));
+		const rideMin = minutes(ride.arriveAt - ride.departAt);
+		options.push({
+			...option({
+				id: `parkride-${lot.name}-${ride.tripId}`,
+				mode: "transit",
+				label: `Park & Ride + Route ${input.routeName(ride.routeId)}`,
+				parts: {
+					walk: walkTo + walkFrom,
+					wait,
+					ride: driveMinutes + rideMin,
+					park: 3,
+				},
+				cost: round(
+					driveKm * CAR_EUR_KM +
+						(profile.hasPass ? 0 : ticket(ride.departAt, ride.arriveAt)),
+				),
+				co2: Math.round(
+					driveKm * CAR_CO2_KM + (rideMin / 60) * 18 * BUS_CO2_KM,
+				),
+				estimated: false,
+				ride,
+				legs: [ride],
+				via: { ...lot, driveMinutes, driveKm: round(driveKm) },
+				notes: [`Drive ${driveMinutes} min to P+R ${lot.name}, park for free`],
+			}),
+			departAt: leave,
+			arriveAt: ride.arriveAt + walkFrom * 60_000,
 		});
 	}
 	const rush = rushHour(now);
@@ -582,7 +663,9 @@ export function rankOptions(
 	const leastWalk = [...transit].sort(
 		(a, b) => a.parts.walk - b.parts.walk || a.minutes - b.minutes,
 	)[0];
-	const keep = new Set([fastest, direct, leastWalk].filter(Boolean));
+	const keep = new Set(
+		[fastest, direct, leastWalk, transit.find((o) => o.via)].filter(Boolean),
+	);
 	for (const o of transit) {
 		if (keep.size >= 6) break;
 		keep.add(o);
@@ -617,7 +700,8 @@ export function rankOptions(
 
 function exclusion(o: TripOption, profile: Profile, icy: boolean) {
 	const needs = new Set(profile.needs);
-	if (o.mode === "car" && !profile.hasCar) return "You don’t have a car";
+	if ((o.mode === "car" || o.via) && !profile.hasCar)
+		return "You don’t have a car";
 	if (o.mode === "carshare") {
 		if (!profile.sharedOk) return "You prefer not to use shared vehicles";
 		if (needs.has("wheelchair")) return "Shared cars aren’t adapted";

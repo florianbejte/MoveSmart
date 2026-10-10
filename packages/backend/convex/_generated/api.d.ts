@@ -13,6 +13,7 @@ import type * as auth from "../auth.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as http from "../http.js";
 import type * as privateData from "../privateData.js";
+import type * as sharedTrips from "../sharedTrips.js";
 import type * as travel from "../travel.js";
 
 import type {
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   healthCheck: typeof healthCheck;
   http: typeof http;
   privateData: typeof privateData;
+  sharedTrips: typeof sharedTrips;
   travel: typeof travel;
 }>;
 

@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
+import { companionStep } from "./companion";
 import { type Disruption, distanceToSegment, tripImpact } from "./disruptions";
 import { toHits } from "./geocode";
 import {
@@ -20,6 +21,7 @@ import {
 	typicalCrowding,
 } from "./signals";
 import { findRides, findTransfers, type Visit } from "./transit";
+import { activeWarning } from "./weather";
 
 const START = Date.parse("2026-10-09T21:00:00Z"); // Vilnius midnight, 10 Oct
 const NOW = START + 12 * 3600_000; // 12:00
@@ -541,4 +543,118 @@ test("disruptions: avoid zones at the destination, closures on the way, incident
 		"transit",
 	]);
 	assert.ok(distanceToSegment(mid, from, far) < 1);
+});
+
+test("official weather warnings for Vilnius raise the outdoor weight", () => {
+	const now = Date.parse("2026-10-10T08:00:00Z");
+	const cap = (
+		area: string,
+		level: string,
+		onset: string,
+		expires: string,
+	) => ({
+		alert: {
+			info: [
+				{
+					language: "lt-LT",
+					event: "Vėjas",
+					area: [{ areaDesc: area }],
+					expires,
+				},
+				{
+					language: "en-GB",
+					event: "Strong wind",
+					onset,
+					expires,
+					area: [{ areaDesc: area }],
+					parameter: [{ valueName: "awareness_level", value: level }],
+				},
+			],
+		},
+	});
+	const warning = activeWarning(
+		{
+			warnings: [
+				cap(
+					"Vilniaus apskritis",
+					"2; yellow; Moderate",
+					"2026-10-10T06:00:00Z",
+					"2026-10-10T20:00:00Z",
+				),
+				cap(
+					"Vilniaus apskritis",
+					"3; orange; Severe",
+					"2026-10-10T07:00:00Z",
+					"2026-10-10T12:00:00Z",
+				),
+				cap(
+					"Klaipėdos apskritis",
+					"4; red; Extreme",
+					"2026-10-10T06:00:00Z",
+					"2026-10-10T20:00:00Z",
+				),
+				cap(
+					"Vilniaus apskritis",
+					"4; red; Extreme",
+					"2026-10-10T10:00:00Z",
+					"2026-10-10T20:00:00Z",
+				),
+			],
+		},
+		now,
+	);
+	assert.equal(warning?.level, "orange");
+	const calm = {
+		temperature: 10,
+		feelsLike: 10,
+		precipitation: 0,
+		windGust: 5,
+		condition: "cloudy",
+	};
+	assert.equal(weatherFactor(calm).factor, 1);
+	assert.equal(
+		weatherFactor({ ...calm, warning: warning ?? undefined }).factor,
+		1.3,
+	);
+});
+
+test("trip companion: when to leave, board, change and get off, following live delays", () => {
+	const leg = (
+		i: number,
+		from: string,
+		to: string,
+		route: string,
+		dep: number,
+		arr: number,
+	) => ({
+		tripId: `t${i}`,
+		routeId: route,
+		route,
+		fromStopId: from,
+		toStopId: to,
+		fromStop: from,
+		toStop: to,
+		walkToMetres: 0,
+		walkFromMetres: 0,
+		departAt: NOW + dep * 60_000,
+		arriveAt: NOW + arr * 60_000,
+		stops: 4,
+		live: false,
+		delaySeconds: null,
+	});
+	const legs = [leg(0, "A", "B", "10", 15, 25), leg(1, "B", "C", "53", 28, 40)];
+	const at = (m: number, delay: number | null = null) =>
+		companionStep(legs, NOW + m * 60_000, () => delay, 5);
+	assert.equal(at(0).key, "wait");
+	assert.equal(at(0).title, "Leave in 9 min");
+	assert.equal(at(10).key, "walk");
+	assert.equal(at(14).key, "board-0");
+	assert.equal(at(20).key, "ride-0");
+	assert.equal(at(24).key, "exit-0");
+	assert.match(at(24).detail, /change to bus 53/);
+	assert.equal(at(26.5).key, "change-0");
+	assert.equal(at(39).key, "exit-1");
+	assert.equal(at(42).key, "done");
+	// The first bus now reports 4 min late: still time to wait at home.
+	assert.equal(at(10, 240).key, "wait");
 });
