@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CityFeature } from "@/lib/transit/city";
 import { distance, freshVehicle } from "@/lib/transit/core";
 import type {
 	LiveFeed,
@@ -99,7 +98,6 @@ export default function TransitExplorer() {
 	const [now, setNow] = useState(Date.now());
 	const city = useCityLayers(now);
 	const [cityOpen, setCityOpen] = useState(false);
-	const [citySelection, setCitySelection] = useState<CityFeature | null>(null);
 	useEffect(() => {
 		const timer = setInterval(() => setNow(Date.now()), 10_000);
 		return () => clearInterval(timer);
@@ -188,7 +186,6 @@ export default function TransitExplorer() {
 	}
 	function selectStop(id: string) {
 		setCityOpen(false);
-		setCitySelection(null);
 		setQuery("");
 		setSelection({ type: "stop", id });
 		setPreviewTrip(null);
@@ -197,7 +194,6 @@ export default function TransitExplorer() {
 	}
 	function selectVehicle(id: string) {
 		setCityOpen(false);
-		setCitySelection(null);
 		setQuery("");
 		setSelection({ type: "vehicle", id });
 		setPreviewTrip(null);
@@ -383,8 +379,6 @@ export default function TransitExplorer() {
 						now={now}
 						open={cityOpen}
 						onOpen={setCityOpen}
-						selected={citySelection}
-						onClose={() => setCitySelection(null)}
 						routeNames={
 							selectedVehicle
 								? [selectedVehicle.route]
@@ -752,11 +746,16 @@ export default function TransitExplorer() {
 			<section className="map-panel" aria-label="Map and live vehicles">
 				<TransitMap
 					city={city.collection}
-					onCity={(feature) => {
-						setCitySelection(feature);
-						setCityOpen(true);
-						panelContent.current?.scrollTo({ top: 0 });
-					}}
+					cityDelayed={city.enabled.filter((id) => {
+						const feed = city.feeds[id];
+						return (
+							!!feed.error ||
+							feed.data?.stale ||
+							(!!feed.data &&
+								!["parking", "signals", "corridors"].includes(id) &&
+								now - feed.data.fetchedAt > 120000)
+						);
+					})}
 					stale={feedStale}
 					now={now}
 					vehicles={

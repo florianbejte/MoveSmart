@@ -2,7 +2,6 @@
 import { useMemo, useState } from "react";
 import {
 	CITY_LAYERS,
-	type CityFeature,
 	type CityFeed,
 	type CityLayerId,
 	EMPTY_CITY,
@@ -85,16 +84,12 @@ export function CityLayers({
 	city,
 	routeNames,
 	now,
-	selected,
-	onClose,
 	open,
 	onOpen,
 }: {
 	city: CityState;
 	routeNames: string[];
 	now: number;
-	selected: CityFeature | null;
-	onClose: () => void;
 	open: boolean;
 	onOpen: (value: boolean) => void;
 }) {
@@ -119,13 +114,6 @@ export function CityLayers({
 		!!incidentFeed.error ||
 		incidentFeed.data?.stale ||
 		(incidentFeed.data && now - incidentFeed.data.fetchedAt > 120000);
-	const selectedCurrent = selected
-		? city.feeds[selected.properties.category].data?.collection.features.find(
-				(f) => f.properties.id === selected.properties.id,
-			)
-		: null;
-	const p = selectedCurrent?.properties ?? selected?.properties;
-	const selectedFeed = p ? city.feeds[p.category] : null;
 	return (
 		<section className="city-layers" aria-label="City data layers">
 			<button
@@ -149,40 +137,9 @@ export function CityLayers({
 			)}
 			{open && (
 				<div className="city-layer-options">
-					{p && (
-						<article className="city-detail">
-							<button type="button" className="text-button" onClick={onClose}>
-								Close detail ×
-							</button>
-							<span className="eyebrow">
-								{CITY_LAYERS.find((layer) => layer.id === p.category)?.label}
-							</span>
-							<h3>{p.title}</h3>
-							<p>
-								{p.description ||
-									CITY_LAYERS.find((layer) => layer.id === p.category)?.note}
-							</p>
-							<small>
-								{eventStillRelevant(p, now)
-									? p.timing
-									: "Published period ended"}
-								{p.start !== null ? ` · ${date(p.start)}` : ""}
-								{p.end !== null ? ` → ${date(p.end)}` : ""}
-							</small>
-							{p.routes.length > 0 && (
-								<p>Reported routes: {p.routes.join(", ")}</p>
-							)}
-							{(selectedFeed?.error || selectedFeed?.data?.stale) && (
-								<p>Source refresh unavailable; details may be outdated.</p>
-							)}
-							<a href={p.source} target="_blank" rel="noreferrer">
-								View source ↗
-							</a>
-						</article>
-					)}
 					<p className="helper-text">
-						Explore the city’s published transport data. Click a shape or marker
-						for details.
+						Explore the city’s published transport data. Hover for a preview;
+						click a shape or marker to keep its details on the map.
 					</p>
 					{CITY_LAYERS.map((layer) => {
 						const feed = city.feeds[layer.id];

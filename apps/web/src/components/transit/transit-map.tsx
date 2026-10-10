@@ -7,11 +7,13 @@ import type { Position, Stop, TripDetail, Vehicle } from "@/lib/transit/types";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { ENV } from "@/env";
 
-import type { CityCollection, CityFeature } from "@/lib/transit/city";
+import type { CityCollection, CityLayerId } from "@/lib/transit/city";
+
+import { cityPopupContent } from "./city-popup";
 
 type Props = {
 	city: CityCollection;
-	onCity: (feature: CityFeature) => void;
+	cityDelayed: CityLayerId[];
 	stale: boolean;
 	now: number;
 	vehicles: Vehicle[];
@@ -30,6 +32,12 @@ export default function TransitMap(props: Props) {
 	const markers = useRef(new Map<string, maplibregl.Marker>());
 	const userMarker = useRef<maplibregl.Marker | null>(null);
 	const handlers = useRef(props);
+	const cityPopup = useRef<{
+		popup: maplibregl.Popup;
+		id: string;
+		pinned: boolean;
+		contentKey: string;
+	} | null>(null);
 	const [ready, setReady] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	useEffect(() => {
@@ -80,6 +88,10 @@ export default function TransitMap(props: Props) {
 			);
 			return;
 		}
+		const closeOnEscape = (event: KeyboardEvent) => {
+			if (event.key === "Escape") cityPopup.current?.popup.remove();
+		};
+		instance.getContainer().addEventListener("keydown", closeOnEscape);
 		map.current = instance;
 		instance.addControl(
 			new maplibregl.NavigationControl({ showCompass: false }),
@@ -139,28 +151,75 @@ export default function TransitMap(props: Props) {
 					"circle-stroke-width": 2,
 				},
 			});
-			instance.on("click", (e) => {
+			const dismissHover = () => {
+				if (!cityPopup.current?.pinned) cityPopup.current?.popup.remove();
+			};
+			const showCity = (e: maplibregl.MapMouseEvent, pinned: boolean) => {
+				if (!pinned && cityPopup.current?.pinned) return;
+				const target = e.originalEvent.target;
+				if (target instanceof Element && target.closest(".maplibregl-popup"))
+					return;
 				if (
+					(target instanceof Element && target.closest(".vehicle-pin")) ||
 					instance.queryRenderedFeatures(e.point, { layers: ["stops-points"] })
 						.length
-				)
+				) {
+					if (pinned) cityPopup.current?.popup.remove();
+					else dismissHover();
 					return;
+				}
 				const hit = instance.queryRenderedFeatures(e.point, {
 					layers: ["city-point", "city-line", "city-fill"],
 				})[0];
 				const feature = handlers.current.city.features.find(
 					(f) => f.properties.id === hit?.properties.id,
 				);
-				if (feature) handlers.current.onCity(feature);
-			});
-			for (const layer of ["city-point", "city-line", "city-fill"]) {
-				instance.on("mouseenter", layer, () => {
-					instance.getCanvas().style.cursor = "pointer";
-				});
-				instance.on("mouseleave", layer, () => {
+				if (!feature) {
+					if (pinned) cityPopup.current?.popup.remove();
+					else dismissHover();
 					instance.getCanvas().style.cursor = "";
+					return;
+				}
+				instance.getCanvas().style.cursor = "pointer";
+				if (!pinned && cityPopup.current?.id === feature.properties.id) return;
+				cityPopup.current?.popup.remove();
+				const stale = handlers.current.cityDelayed.includes(
+					feature.properties.category,
+				);
+				const popup = new maplibregl.Popup({
+					closeButton: pinned,
+					closeOnClick: false,
+					focusAfterOpen: false,
+					maxWidth: "280px",
+					offset: 14,
+					className: `city-map-popup ${pinned ? "is-pinned" : "is-preview"}`,
+				})
+					.setLngLat(
+						feature.geometry.type === "Point"
+							? [
+									feature.geometry.coordinates[0],
+									feature.geometry.coordinates[1],
+								]
+							: e.lngLat,
+					)
+					.setDOMContent(cityPopupContent(feature, pinned, stale))
+					.addTo(instance);
+				cityPopup.current = {
+					popup,
+					id: feature.properties.id,
+					pinned,
+					contentKey: JSON.stringify([feature.properties, stale]),
+				};
+				popup.on("close", () => {
+					if (cityPopup.current?.popup === popup) cityPopup.current = null;
 				});
-			}
+			};
+			instance.on("click", (e) => showCity(e, true));
+			instance.on("mousemove", (e) => {
+				if (!e.originalEvent.buttons) showCity(e, false);
+			});
+			instance.on("mouseout", dismissHover);
+			instance.on("movestart", dismissHover);
 			instance.addSource("route", {
 				type: "geojson",
 				data: { type: "FeatureCollection", features: [] },
@@ -228,6 +287,8 @@ export default function TransitMap(props: Props) {
 		const observer = new ResizeObserver(() => instance.resize());
 		observer.observe(container.current);
 		return () => {
+			instance.getContainer().removeEventListener("keydown", closeOnEscape);
+			cityPopup.current?.popup.remove();
 			observer.disconnect();
 			instance.remove();
 			map.current = null;
@@ -240,7 +301,24 @@ export default function TransitMap(props: Props) {
 		(
 			map.current.getSource("city") as maplibregl.GeoJSONSource | undefined
 		)?.setData(props.city);
-	}, [ready, props.city]);
+		const active = cityPopup.current;
+		if (active) {
+			const feature = props.city.features.find(
+				(f) => f.properties.id === active.id,
+			);
+			if (!feature) active.popup.remove();
+			else {
+				const stale = props.cityDelayed.includes(feature.properties.category);
+				const key = JSON.stringify([feature.properties, stale]);
+				if (key !== active.contentKey) {
+					active.popup.setDOMContent(
+						cityPopupContent(feature, active.pinned, stale),
+					);
+					active.contentKey = key;
+				}
+			}
+		}
+	}, [ready, props.city, props.cityDelayed]);
 	useEffect(() => {
 		if (!ready || !map.current) return;
 		const source = map.current.getSource("stops") as maplibregl.GeoJSONSource;

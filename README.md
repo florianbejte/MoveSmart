@@ -172,7 +172,7 @@ MoveSmart/
 
 Open **City layers** in the sidebar to toggle transit disruptions, roadworks,
 restrictions, congestion/road load, parking zones, traffic-light locations, and
-coordinated green corridors. Click map geometry for the published description,
+coordinated green corridors. Hover over map geometry for a preview; click or tap to pin a popup with the published description,
 route numbers, period (Vilnius time), and source link. Transit notices follow the
 selected vehicle, stop, or route filter. Route numbers in the incident source do
 not always distinguish bus and trolleybus services.
