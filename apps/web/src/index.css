@@ -1,13 +1,16 @@
 @import "@MoveSmart/ui/globals.css";
 :root {
-	--font-geist-sans: "Manrope Variable";
-	--font-geist-mono: "Manrope Variable";
+	/* Go Vilnius brand: Montserrat for digital, Iconic Red, Worthy navy and greys. */
+	--font-geist-sans: "Montserrat Variable";
+	--font-geist-mono: "Montserrat Variable";
 	--paper: #fff;
-	--ink: #182744;
-	--blue: #204bcc;
-	--yellow: #f3ce49;
-	--slate: #627089;
-	--mist: #edf1f7;
+	--ink: #414454;
+	--red: #ed1c24;
+	--yellow: #bdd947;
+	--pink: #ed2891;
+	--lavender: #ced2df;
+	--slate: #6b6b6b;
+	--mist: #ebebeb;
 }
 body {
 	margin: 0;
@@ -27,7 +30,7 @@ select {
 	-webkit-tap-highlight-color: transparent;
 }
 :focus-visible {
-	outline: 3px solid #204bcc;
+	outline: 3px solid #ed1c24;
 	outline-offset: 4px;
 }
 .app-shell {
@@ -44,24 +47,29 @@ select {
 	background: var(--paper);
 	position: relative;
 	z-index: 30;
-	border-bottom: 1px solid #e2e7f0;
+	border-bottom: 1px solid #e0e0e0;
 }
 .app-brand {
 	display: flex;
 	align-items: center;
-	gap: 9px;
-	color: var(--ink);
-	font-size: 22px;
-	font-weight: 850;
-	letter-spacing: -1.2px;
+	gap: 5px;
+	font-size: 19px;
+	font-weight: 900;
+	letter-spacing: 0.2px;
+	line-height: 1;
 	text-decoration: none;
 }
-.brand-mark {
-	width: 34px;
-	height: 36px;
-	display: grid;
-	place-items: center;
-	color: var(--blue);
+.brand-bubble {
+	background: var(--red);
+	color: white;
+	padding: 5px 7px 4px;
+	border-radius: 9px 9px 0 9px;
+}
+.brand-word {
+	color: var(--red);
+}
+.crenellation {
+	color: var(--red);
 }
 .app-header nav {
 	display: flex;
@@ -79,7 +87,7 @@ select {
 	color: var(--slate);
 }
 .app-header nav a.current {
-	color: var(--blue);
+	color: var(--red);
 }
 .app-header nav a:first-child {
 	display: none;
@@ -107,8 +115,8 @@ select {
 		gap: 50px;
 	}
 	.app-brand {
-		font-size: 27px;
-		gap: 12px;
+		font-size: 23px;
+		gap: 6px;
 	}
 	.app-header nav {
 		margin-left: 36px;
@@ -123,7 +131,7 @@ select {
 	.app-header nav a.current::after {
 		content: "";
 		height: 3px;
-		background: var(--blue);
+		background: var(--red);
 		position: absolute;
 		bottom: 0;
 		left: 0;
@@ -156,22 +164,22 @@ select {
 	display: grid;
 	place-items: center;
 	padding: 28px;
-	background: #edf1f7;
+	background: #ebebeb;
 }
 .account-panel {
 	max-width: 520px;
 	width: 100%;
 	background: white;
 	padding: clamp(26px, 6vw, 56px);
-	border-radius: 24px;
-	box-shadow: 0 15px 50px #1827440c;
+	border-radius: 24px 24px 0 24px;
+	box-shadow: 0 15px 50px #4144540c;
 }
 .account-symbol {
 	background: var(--yellow);
 	color: var(--ink);
 	width: 64px;
 	height: 64px;
-	border-radius: 18px;
+	border-radius: 18px 18px 0 18px;
 	display: grid;
 	place-items: center;
 	margin-bottom: 28px;
@@ -192,9 +200,9 @@ select {
 	display: inline-flex;
 	align-items: center;
 	min-height: 48px;
-	background: var(--blue);
+	background: var(--red);
 	color: white;
-	border-radius: 12px;
+	border-radius: 12px 12px 0 12px;
 	padding: 0 20px;
 	font-size: 13px;
 	font-weight: 700;
@@ -205,8 +213,8 @@ select {
 }
 .account-form input {
 	min-height: 48px;
-	border: 1px solid #d4ddea;
-	border-radius: 9px;
+	border: 1px solid #ced2df;
+	border-radius: 9px 9px 0 9px;
 	background: white;
 	padding: 0 12px;
 	font-size: 16px;
@@ -218,13 +226,13 @@ select {
 }
 .account-form button[type="submit"] {
 	min-height: 48px;
-	border-radius: 10px;
-	background: var(--blue);
+	border-radius: 10px 10px 0 10px;
+	background: var(--red);
 	color: white;
 	font-size: 13px;
 }
 .account-form button[type="button"] {
-	color: var(--blue);
+	color: var(--red);
 	font-size: 12px;
 	min-height: 44px;
 }

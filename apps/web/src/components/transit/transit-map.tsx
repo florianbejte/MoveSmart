@@ -147,12 +147,12 @@ export default function TransitMap(props: Props) {
 					mapSymbolImage(layer.id, layer.color),
 					{ pixelRatio: 2 },
 				);
-			instance.addImage("symbol-stop", mapSymbolImage("stop", "#495c79"), {
+			instance.addImage("symbol-stop", mapSymbolImage("stop", "#414454"), {
 				pixelRatio: 2,
 			});
 			instance.addImage(
 				"symbol-selected-stop",
-				mapSymbolImage("stop", "#204bcc", true),
+				mapSymbolImage("stop", "#ed1c24", true),
 				{ pixelRatio: 2 },
 			);
 			instance.addSource("city", {

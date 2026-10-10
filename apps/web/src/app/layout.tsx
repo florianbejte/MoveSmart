@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "@fontsource-variable/manrope";
+import "@fontsource-variable/montserrat";
 
 import "../index.css";
 

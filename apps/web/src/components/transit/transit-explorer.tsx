@@ -981,7 +981,7 @@ export default function TransitExplorer() {
 						</span>
 					))}
 					<span>
-						<MapSymbol kind="stop" color="#495c79" />
+						<MapSymbol kind="stop" color="#414454" />
 						Stop
 					</span>
 					{city.enabled.includes("shelters") && (
