@@ -1,11 +1,18 @@
 import { strFromU8, unzipSync } from "fflate";
 import { walkingAccess } from "../plan/access";
 import {
+	expectedDelay,
+	REPORTED_CROWDING,
+	recordDelays,
+	typicalCrowding,
+} from "../plan/signals";
+import {
 	findRides,
 	findTransfers,
 	type RideSearch,
 	type TransitRide,
 } from "../plan/transit";
+import { getReports, summaries } from "../reports/store";
 import {
 	activeService,
 	distance,
@@ -217,8 +224,10 @@ export async function getLive(): Promise<LiveFeed> {
 		const text = await response.text();
 		if (!text.includes("MatavimoLaikas") || !text.includes("ReisoIdGTFS"))
 			throw new Error("Invalid vehicle feed");
+		const vehicles = parseVehicles(text, sourceUpdatedAt);
+		recordDelays(vehicles);
 		live = {
-			vehicles: parseVehicles(text, sourceUpdatedAt),
+			vehicles,
 			fetchedAt: Date.now(),
 			sourceUpdatedAt,
 			stale: Date.now() - sourceUpdatedAt > 120_000,
@@ -480,10 +489,47 @@ export async function getRides(
 				),
 			),
 	});
+	// Rider crowding reports from the last 15 minutes, by trip and by route.
+	const reports = summaries(await getReports().catch(() => []), now);
+	const reportByTrip = new Map(reports.map((r) => [r.tripId, r]));
+	const reportByRoute = new Map(
+		reports.flatMap((r) => {
+			const route = data.trips.get(r.tripId)?.route_id;
+			return route ? [[route, r] as const] : [];
+		}),
+	);
+	const routeInfo = new Map(data.network.routes.map((r) => [r.id, r]));
+	const signals = (r: TransitRide) => {
+		const typical = typicalCrowding(r.departAt);
+		const own = reportByTrip.get(r.tripId);
+		const sameRoute = reportByRoute.get(r.routeId);
+		const crowding = own
+			? {
+					value: REPORTED_CROWDING[own.level],
+					source: "riders" as const,
+					reports: own.count,
+				}
+			: sameRoute
+				? {
+						value: (REPORTED_CROWDING[sameRoute.level] + typical) / 2,
+						source: "route" as const,
+						reports: sameRoute.count,
+					}
+				: { value: typical, source: "typical" as const, reports: 0 };
+		const route = routeInfo.get(r.routeId);
+		const delay = expectedDelay(
+			route?.name ?? "",
+			route?.mode === "trolleybus" ? "trolleybus" : "bus",
+			r.departAt,
+			r.live,
+		);
+		return { crowding, expectedDelay: delay };
+	};
 	const named = (r: TransitRide) => ({
 		...r,
 		walkToMinutes: query.walkMinutes(r.walkToMetres),
 		walkFromMinutes: query.walkMinutes(r.walkFromMetres),
+		...signals(r),
 		fromStop: data.stops.get(r.fromStopId)?.name ?? r.fromStopId,
 		toStop: data.stops.get(r.toStopId)?.name ?? r.toStopId,
 		destination:

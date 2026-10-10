@@ -323,3 +323,24 @@ select {
 		font-size: 28px;
 	}
 }
+.profile-formula {
+	margin-top: 14px;
+	padding: 12px;
+	border-radius: 12px 12px 0 12px;
+	background: white;
+	border: 1px solid var(--lavender);
+}
+.profile-formula small {
+	display: block;
+	font-size: 11px;
+	color: var(--slate);
+}
+.profile-formula p {
+	margin: 6px 0;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.8;
+}
+.profile-formula b {
+	color: var(--red);
+}

@@ -46,6 +46,22 @@ export default defineSchema({
 	})
 		.index("by_user", ["userId", "usedAt"])
 		.index("by_user_name", ["userId", "name"]),
+	// Rider reports of places to avoid that no official feed covers (protests, crowds).
+	areaReports: defineTable({
+		kind: v.union(
+			v.literal("protest"),
+			v.literal("event"),
+			v.literal("blocked"),
+			v.literal("emergency"),
+		),
+		lat: v.number(),
+		lon: v.number(),
+		note: v.optional(v.string()),
+		userIds: v.array(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		expiresAt: v.number(),
+	}).index("by_expiry", ["expiresAt"]),
 	// Green trips a user set off on, for their personal CO₂ savings.
 	greenTrips: defineTable({
 		userId: v.string(),

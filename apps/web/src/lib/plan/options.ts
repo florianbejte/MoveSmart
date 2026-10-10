@@ -34,11 +34,34 @@ export type TripOption = {
 	ride?: TransitRide;
 	/** Every bus of a public transport trip in order: one for a direct ride, two with a change. */
 	legs?: TransitRide[];
+	/** Closures, incidents or rider-reported trouble on the way, and the minutes they likely add. */
+	disruption?: { minutes: number; titles: string[] };
 	/** Taxi and car-sharing providers, best first for this rider. */
 	quotes?: Quote[];
 	notes: string[];
 };
+/** One term of C_u(r), in perceived minutes, with how it was computed. */
+export type Term = {
+	id:
+		| "ride"
+		| "walk"
+		| "wait"
+		| "transfers"
+		| "crowding"
+		| "delay"
+		| "cost"
+		| "co2"
+		| "city";
+	symbol: string;
+	label: string;
+	minutes: number;
+	detail: string;
+};
 export type RankedOption = TripOption & {
+	/** C_u(r) broken into its terms; score is their sum. */
+	terms: Term[];
+	/** C_u(r) itself: the six time terms, i.e. how long the trip feels for this rider. */
+	feels: number;
 	score: number;
 	reasons: string[];
 	excluded?: string;
@@ -54,6 +77,15 @@ export type RankedOption = TripOption & {
 };
 
 export const GREEN_MODES: Mode[] = ["transit", "walk", "bike"];
+/** The terms of the rider's formula; price, CO₂ and city impact are counted separately. */
+export const FEEL_TERMS: Term["id"][] = [
+	"ride",
+	"walk",
+	"wait",
+	"transfers",
+	"crowding",
+	"delay",
+];
 const CAR_MODES: Mode[] = ["car", "taxi", "carshare"];
 
 // Vilnius approximations; see notes shown with each option.
@@ -343,55 +375,195 @@ export function estimateOptions(input: {
 const round = (n: number) => Math.round(n * 10) / 10;
 
 /** Generalised cost from the pitch: ride time plus profile-weighted walking, waiting, money, CO₂ and risk. */
+/** The rider's weights in C_u(r), from their onboarding answers. */
+export type Weights = {
+	alpha: number;
+	m: number;
+	beta: number;
+	gamma: number;
+	delta: number;
+	eta: number;
+	perEuro: number;
+	perKg: number;
+	weather: string[];
+};
+export function weightsFor(profile: Profile, weather: Weather | null): Weights {
+	const p = new Set(profile.priorities);
+	const needs = new Set(profile.needs);
+	const w = weatherFactor(weather, profile.weatherSensitive);
+	return {
+		// α: how much a walking minute weighs.
+		alpha: round(
+			(p.has("comfort") ? 1.4 : 1) *
+				(needs.has("luggage") ? 1.5 : 1) *
+				(stepFree(profile) || needs.has("older") ? 1.4 : 1),
+		),
+		// m(W): weather multiplier on time outdoors.
+		m: round(w.factor),
+		// β: a waiting minute.
+		beta: p.has("comfort") || p.has("certainty") ? 1.5 : 1.2,
+		// γ: minutes one change feels like.
+		gamma:
+			(p.has("comfort") ? 8 : 5) * (stepFree(profile) ? 2 : 1) +
+			(needs.has("older") || needs.has("kids") ? 3 : 0),
+		// δ: minutes a packed vehicle (Q = 1) feels like over the whole ride.
+		delta:
+			needs.has("stroller") || needs.has("wheelchair")
+				? 15
+				: p.has("comfort")
+					? 12
+					: 6,
+		// η: weight of each expected minute of delay.
+		eta: p.has("certainty") ? 2 : 1,
+		// MoveSmart extensions: money and the city's CO₂ in minutes.
+		perEuro: p.has("cost") ? 12 : 2,
+		perKg: p.has("eco") ? 25 : 12,
+		weather: w.reasons,
+	};
+}
+
+/** C_u(r) = T_ride + α·m(W)·T_walk + β·T_wait + γ·N_transfers + δ·Q_crowding + η·D_delay (+ € and CO₂). */
+export function costTerms(o: TripOption, profile: Profile, k: Weights): Term[] {
+	const outdoor = o.mode === "bike" || o.mode === "scooter";
+	const overLimit = Math.max(0, o.parts.walk - profile.walkLimit);
+	const legs = o.legs ?? [];
+	const transfers =
+		o.mode === "transit" ? (o.estimated ? 1 : Math.max(0, legs.length - 1)) : 0;
+	// Q averaged over riding time; D summed over buses. Cars face traffic instead.
+	const rideMs = legs.reduce((s, l) => s + (l.arriveAt - l.departAt), 0) || 1;
+	const q =
+		o.mode === "transit"
+			? legs.length
+				? legs.reduce(
+						(s, l) =>
+							s + (l.crowding?.value ?? 0.3) * (l.arriveAt - l.departAt),
+						0,
+					) / rideMs
+				: 0.5
+			: 0;
+	const d =
+		o.mode === "transit"
+			? legs.length
+				? legs.reduce((s, l) => s + (l.expectedDelay?.minutes ?? 1), 0)
+				: 3
+			: o.mode === "car" || o.mode === "taxi" || o.mode === "carshare"
+				? rushHour(o.departAt)
+					? 4
+					: 1.5
+				: 0;
+	const qSource = legs.find((l) => l.crowding?.source === "riders")
+		? "rider reports"
+		: legs.find((l) => l.crowding?.source === "route")
+			? "reports on this route"
+			: "typical load now";
+	const learned = legs.find((l) => l.expectedDelay?.source === "learned");
+	const trouble = o.disruption?.minutes ?? 0;
+	const terms: Term[] = [
+		{
+			id: "ride",
+			symbol: "T_ride",
+			label: outdoor ? "Riding (outdoors)" : "On board",
+			minutes: o.parts.ride * (outdoor ? k.m : 1),
+			detail:
+				outdoor && k.m > 1
+					? `${o.parts.ride} min × m(W) ${k.m}`
+					: `${o.parts.ride} min`,
+		},
+		{
+			id: "walk",
+			symbol: "α·m(W)·T_walk",
+			label: "Walking",
+			minutes: o.parts.walk * k.alpha * k.m + overLimit * 3,
+			detail: `${o.parts.walk} min × α ${k.alpha} × m(W) ${k.m}${overLimit ? " + over your limit" : ""}`,
+		},
+		{
+			id: "wait",
+			symbol: "β·T_wait",
+			label: o.parts.park ? "Waiting & parking" : "Waiting",
+			minutes: (o.parts.wait + o.parts.park) * k.beta,
+			detail: `${o.parts.wait + o.parts.park} min × β ${k.beta}`,
+		},
+		{
+			id: "transfers",
+			symbol: "γ·N_transfers",
+			label: "Changes",
+			minutes: transfers * k.gamma,
+			detail: `${transfers} × γ ${k.gamma} min`,
+		},
+		{
+			id: "crowding",
+			symbol: "δ·Q_crowding",
+			label: "Crowding",
+			minutes: q * k.delta,
+			detail:
+				o.mode === "transit"
+					? `Q ${q.toFixed(2)} (${qSource}) × δ ${k.delta}`
+					: "Your own space",
+		},
+		{
+			id: "delay",
+			symbol: "η·D_delay",
+			label: o.mode === "transit" ? "Expected delay" : "Traffic risk",
+			minutes: (d + trouble) * k.eta,
+			detail:
+				(o.mode === "transit"
+					? `${round(d)} min ${learned ? `(learned from ${learned.expectedDelay?.samples} live readings)` : "(typical)"}`
+					: `${d} min`) +
+				(trouble
+					? ` + ${trouble} min (${o.disruption?.titles.slice(0, 2).join("; ")})`
+					: "") +
+				` × η ${k.eta}`,
+		},
+		{
+			id: "cost",
+			symbol: "€",
+			label: "Price",
+			minutes: o.cost * k.perEuro,
+			detail: `€${o.cost.toFixed(2)} × ${k.perEuro} min/€`,
+		},
+		{
+			id: "co2",
+			symbol: "CO₂",
+			label: "Emissions",
+			minutes: (o.co2 / 1000) * k.perKg,
+			detail: `${kg(o.co2)} × ${k.perKg} min/kg`,
+		},
+	];
+	if (CAR_MODES.includes(o.mode))
+		terms.push({
+			id: "city",
+			symbol: "City",
+			label: "Congestion & street space",
+			minutes: o.co2 === 0 ? 3 : 6,
+			detail: "Cars take road and parking space from everyone",
+		});
+	return terms.map((t) => ({ ...t, minutes: round(t.minutes) }));
+}
+
 export function rankOptions(
 	options: TripOption[],
 	profile: Profile,
 	weather: Weather | null,
 ): RankedOption[] {
-	const p = new Set(profile.priorities);
-	const w = weatherFactor(weather, profile.weatherSensitive);
-	const icy = w.reasons.includes("slippery");
-	const comfort = p.has("comfort") ? 1.4 : 1;
-	const walkWeight =
-		comfort *
-		(profile.needs.includes("luggage") ? 1.5 : 1) *
-		(stepFree(profile) ? 1.4 : 1);
-	// Minutes one euro is worth: about €5/h of time for cost-focused riders.
-	const perEuro = p.has("cost") ? 12 : 2;
-	// MoveSmart's mission: CO₂ always counts, and more for riders who chose "greenest".
-	const perKg = p.has("eco") ? 25 : 12;
+	const k = weightsFor(profile, weather);
+	const icy = k.weather.includes("slippery");
 	const driving =
 		options.find((o) => o.mode === "car")?.co2 ??
 		options.find((o) => o.mode === "taxi")?.co2 ??
 		0;
 	const ranked = options.map((o): RankedOption => {
-		const excluded = exclusion(o, profile, icy);
-		const outdoor =
-			o.mode === "bike" || o.mode === "scooter" ? o.parts.ride : 0;
-		const overLimit = Math.max(0, o.parts.walk - profile.walkLimit);
-		let score =
-			o.parts.ride +
-			outdoor * (w.factor - 1) +
-			o.parts.walk * walkWeight * w.factor +
-			overLimit * 3 +
-			o.parts.wait * (p.has("comfort") ? 1.5 : 1.2) +
-			o.parts.park * 1.5 +
-			o.cost * perEuro +
-			(o.co2 / 1000) * perKg;
-		if (o.estimated) score += p.has("certainty") ? 8 : 3;
-		if (o.ride?.live && p.has("certainty")) score -= 2;
-		if (o.mode === "transit" && (o.estimated || (o.legs?.length ?? 1) > 1))
-			score += (p.has("comfort") ? 6 : 3) * (stepFree(profile) ? 2 : 1);
-		if ((o.mode === "bike" || o.mode === "scooter") && p.has("comfort"))
-			score += 4;
-		if ((o.mode === "walk" || o.mode === "bike") && p.has("eco")) score -= 3;
-		// Congestion, parking and street space: cars cost the city more than their CO₂.
-		if (CAR_MODES.includes(o.mode)) score += o.co2 === 0 ? 3 : 6;
+		const terms = costTerms(o, profile, k);
 		return {
 			...o,
-			score: Math.round(score),
+			terms,
+			score: Math.round(terms.reduce((s, t) => s + t.minutes, 0)),
+			feels: Math.round(
+				terms
+					.filter((t) => FEEL_TERMS.includes(t.id))
+					.reduce((s, t) => s + t.minutes, 0),
+			),
 			reasons: [],
-			excluded,
+			excluded: exclusion(o, profile, icy),
 			green: GREEN_MODES.includes(o.mode),
 			co2Saved: Math.max(0, driving - o.co2),
 		};
@@ -428,7 +600,7 @@ export function rankOptions(
 		shown.unshift(green);
 	}
 	for (const o of shown) {
-		o.reasons = explain(o, shown, profile, w.reasons);
+		o.reasons = explain(o, shown, profile, k.weather);
 		if (o === fastest)
 			o.reasons.splice(o.promoted ? 1 : 0, 0, "Fastest public transport");
 		if (o === direct && (o.legs?.length ?? 1) === 1)

@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
+import { type Disruption, distanceToSegment, tripImpact } from "./disruptions";
 import { toHits } from "./geocode";
 import {
 	estimateOptions,
@@ -7,10 +8,17 @@ import {
 	rushHour,
 	type Weather,
 	weatherFactor,
+	weightsFor,
 } from "./options";
 import { sliceShape } from "./paths";
 import { DEFAULT_PROFILE, type Profile, persona } from "./profile";
 import { quote } from "./providers";
+import {
+	expectedDelay,
+	recordDelays,
+	resetDelaysForTests,
+	typicalCrowding,
+} from "./signals";
 import { findRides, findTransfers, type Visit } from "./transit";
 
 const START = Date.parse("2026-10-09T21:00:00Z"); // Vilnius midnight, 10 Oct
@@ -361,4 +369,176 @@ test("one-change trips name both buses, the change stop and a realistic connecti
 		["r53", "t53", "X2", "D"],
 	);
 	assert.equal(second.walkToMetres, 60);
+});
+
+test("the score is exactly the sum of the C_u(r) terms", () => {
+	for (const o of plan(DEFAULT_PROFILE)) {
+		const sum = o.terms.reduce((s, t) => s + t.minutes, 0);
+		assert.ok(Math.abs(sum - o.score) <= 1, `${o.id}: ${sum} vs ${o.score}`);
+		assert.deepEqual(
+			o.terms.slice(0, 6).map((t) => t.id),
+			["ride", "walk", "wait", "transfers", "crowding", "delay"],
+		);
+	}
+});
+
+test("weights follow the profile: comfort, step-free and certainty", () => {
+	const base = weightsFor(DEFAULT_PROFILE, null);
+	const parent = weightsFor(
+		{
+			...DEFAULT_PROFILE,
+			needs: ["stroller"],
+			priorities: ["comfort", "certainty"],
+		},
+		null,
+	);
+	assert.ok(parent.alpha > base.alpha);
+	assert.ok(parent.gamma > base.gamma);
+	assert.equal(parent.delta, 15);
+	assert.equal(parent.eta, 2);
+	assert.equal(base.m, 1);
+});
+
+test("a crowded bus costs a stroller parent more than an empty one", () => {
+	const parent = { ...DEFAULT_PROFILE, needs: ["stroller" as const] };
+	const ride = (value: number) => ({
+		tripId: "t",
+		routeId: "r",
+		fromStopId: "a",
+		toStopId: "b",
+		walkToMetres: 100,
+		walkFromMetres: 100,
+		departAt: NOW + 5 * 60_000,
+		arriveAt: NOW + 20 * 60_000,
+		stops: 5,
+		live: false,
+		delaySeconds: null,
+		crowding: { value, source: "riders" as const, reports: 2 },
+	});
+	const score = (value: number) =>
+		rankOptions(
+			estimateOptions({
+				from,
+				to: far,
+				now: NOW,
+				rides: [ride(value)],
+				routeName: () => "53",
+				profile: parent,
+			}),
+			parent,
+			null,
+		)
+			.find((o) => o.mode === "transit")
+			?.terms.find((t) => t.id === "crowding");
+	assert.equal(score(0.15)?.minutes, 2.3);
+	assert.equal(score(0.95)?.minutes, 14.3);
+	assert.match(score(0.95)?.detail ?? "", /rider reports/);
+});
+
+test("typical crowding peaks at rush hour; delays are learned from live GPS", () => {
+	assert.equal(typicalCrowding(Date.parse("2026-10-12T05:30:00Z")), 0.75); // Mon 08:30
+	assert.equal(typicalCrowding(Date.parse("2026-10-12T22:00:00Z")), 0.1); // Tue 01:00
+	resetDelaysForTests();
+	const at = Date.parse("2026-10-12T05:30:00Z");
+	const bus = (id: string, delay: number) => ({
+		id,
+		number: id,
+		routeId: null,
+		route: "4G",
+		mode: "bus" as const,
+		destination: "",
+		tripId: null,
+		speed: 0,
+		heading: 0,
+		delay,
+		measuredAt: at,
+		lat: 0,
+		lon: 0,
+	});
+	recordDelays(
+		[1, 2, 3, 4, 5, 6].map((i) => bus(`v${i}`, 180)),
+		at,
+	);
+	const learned = expectedDelay("4G", "bus", at, false);
+	assert.equal(learned.source, "learned");
+	assert.equal(learned.minutes, 3);
+	// A live time already includes today's delay; only part stays uncertain.
+	assert.equal(expectedDelay("4G", "bus", at, true).minutes, 0.9);
+	assert.equal(expectedDelay("7", "trolleybus", at, false).source, "typical");
+});
+
+test("disruptions: avoid zones at the destination, closures on the way, incidents on your route", () => {
+	const profile = { ...DEFAULT_PROFILE, hasCar: true };
+	const ride = {
+		tripId: "t",
+		routeId: "r53",
+		fromStopId: "a",
+		toStopId: "b",
+		walkToMetres: 100,
+		walkFromMetres: 100,
+		departAt: NOW + 5 * 60_000,
+		arriveAt: NOW + 25 * 60_000,
+		stops: 6,
+		live: false,
+		delaySeconds: null,
+	};
+	const options = estimateOptions({
+		from,
+		to: far,
+		now: NOW,
+		rides: [ride],
+		routeName: () => "53",
+		profile,
+	});
+	const mid = { lat: (from.lat + far.lat) / 2, lon: (from.lon + far.lon) / 2 };
+	const d = (
+		kind: Disruption["kind"],
+		at: { lat: number; lon: number },
+		extra = {},
+	) => ({
+		id: kind,
+		kind,
+		title: kind,
+		detail: "",
+		start: null,
+		end: null,
+		source: "official" as const,
+		...at,
+		...extra,
+	});
+	const impact = tripImpact(
+		{ from, to: far },
+		options,
+		[
+			d(
+				"protest",
+				{ lat: far.lat + 0.002, lon: far.lon },
+				{ source: "riders" },
+			),
+			d("closure", mid),
+			d("transit", { lat: 0, lon: 0 }, { routes: ["53"] }),
+			d("roadworks", mid, { end: NOW - 1 }), // already over
+		],
+		NOW,
+		(id) => (id === "a" ? from : id === "b" ? far : undefined),
+		() => "53",
+	);
+	assert.deepEqual(
+		impact.destination.map((x) => x.kind),
+		["protest"],
+	);
+	const car = impact.options.get("car");
+	// The car also drives into the protest zone at the destination.
+	assert.deepEqual(
+		car?.found.map((x) => x.kind),
+		["protest", "closure"],
+	);
+	assert.equal(car?.minutes, 18);
+	const busId = options.find((o) => o.mode === "transit")?.id ?? "";
+	const bus = impact.options.get(busId);
+	assert.deepEqual(bus?.found.map((x) => x.kind).sort(), [
+		"protest",
+		"transit",
+	]);
+	assert.ok(distanceToSegment(mid, from, far) < 1);
 });

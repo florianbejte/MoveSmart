@@ -1,3 +1,4 @@
+import { officialDisruptions } from "@/lib/plan/official-disruptions";
 import { getWeather } from "@/lib/plan/weather";
 import { getRides } from "@/lib/transit/server";
 
@@ -21,12 +22,13 @@ export async function GET(request: Request) {
 			{ status: 400 },
 		);
 	try {
-		const [transit, weather] = await Promise.all([
+		const [transit, weather, disruptions] = await Promise.all([
 			getRides(from, to, Math.min(90, Math.max(40, pace)), maxWalk),
 			getWeather(),
+			officialDisruptions(from, to).catch(() => []),
 		]);
 		return Response.json(
-			{ ...transit, weather },
+			{ ...transit, weather, disruptions },
 			{ headers: { "Cache-Control": "no-store" } },
 		);
 	} catch (error) {

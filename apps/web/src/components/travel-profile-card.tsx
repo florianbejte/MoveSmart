@@ -3,7 +3,7 @@
 import { Leaf, Pencil, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { kg } from "@/lib/plan/options";
+import { kg, weightsFor } from "@/lib/plan/options";
 import { NEEDS, PRIORITIES, persona } from "@/lib/plan/profile";
 import { useAccount } from "./account";
 import { Onboarding } from "./transit/onboarding";
@@ -83,6 +83,22 @@ export function TravelProfileCard() {
 				</dl>
 			) : (
 				<p>Answer five quick questions so we can rank trips for you.</p>
+			)}
+			{p && (
+				<div className="profile-formula">
+					<small>Your personal route formula</small>
+					<p>
+						C(r) = T<sub>ride</sub> + <b>{weightsFor(p, null).alpha}</b>·m(W)·T
+						<sub>walk</sub> + <b>{weightsFor(p, null).beta}</b>·T<sub>wait</sub>{" "}
+						+ <b>{weightsFor(p, null).gamma}</b>·N<sub>transfers</sub> +{" "}
+						<b>{weightsFor(p, null).delta}</b>·Q<sub>crowding</sub> +{" "}
+						<b>{weightsFor(p, null).eta}</b>·D<sub>delay</sub>
+					</p>
+					<small>
+						Walking, waiting, changes, crowding and delays weighted by your
+						answers. Change an answer and every trip re-ranks.
+					</small>
+				</div>
 			)}
 			<button
 				type="button"

@@ -355,6 +355,35 @@ export default function TransitMap(props: Props) {
 					"line-opacity": 0.85,
 				},
 			});
+			// Places to avoid near the planned trip, sized in metres at any zoom.
+			instance.addSource("avoid", { type: "geojson", data: EMPTY_PLAN });
+			const metresPerPixel = (z: number) =>
+				(156543 * Math.cos((54.69 * Math.PI) / 180)) / 2 ** z;
+			instance.addLayer({
+				id: "avoid-zones",
+				type: "circle",
+				source: "avoid",
+				paint: {
+					"circle-radius": [
+						"interpolate",
+						["exponential", 2],
+						["zoom"],
+						10,
+						["/", ["get", "radius"], metresPerPixel(10)],
+						18,
+						["/", ["get", "radius"], metresPerPixel(18)],
+					],
+					"circle-color": ["case", ["get", "avoid"], "#ed1c24", "#f0a000"],
+					"circle-opacity": 0.16,
+					"circle-stroke-color": [
+						"case",
+						["get", "avoid"],
+						"#ed1c24",
+						"#d08a00",
+					],
+					"circle-stroke-width": 2,
+				},
+			});
 			// The planned trip: walking legs dashed, rides solid, with start and end markers.
 			instance.addSource("plan", { type: "geojson", data: EMPTY_PLAN });
 			instance.addLayer({
@@ -840,6 +869,14 @@ export default function TransitMap(props: Props) {
 	useEffect(() => {
 		if (!ready || !map.current) return;
 		const plan = props.plan;
+		(map.current.getSource("avoid") as maplibregl.GeoJSONSource)?.setData({
+			type: "FeatureCollection",
+			features: (plan?.avoid ?? []).map((z) => ({
+				type: "Feature" as const,
+				properties: { radius: z.radius, avoid: z.avoid, title: z.title },
+				geometry: { type: "Point" as const, coordinates: [z.lon, z.lat] },
+			})),
+		});
 		(map.current.getSource("plan") as maplibregl.GeoJSONSource)?.setData(
 			plan
 				? {

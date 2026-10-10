@@ -3,6 +3,7 @@
 import { api } from "@MoveSmart/backend/convex/_generated/api";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { createContext, useContext, useEffect, useState } from "react";
+import type { Disruption } from "@/lib/plan/disruptions";
 import {
 	loadProfile,
 	type Profile,
@@ -23,7 +24,16 @@ export type Account = {
 	/** CO₂ the rider avoided by choosing green trips. */
 	impact: Impact;
 	logGreenTrip: (mode: string, co2Saved: number) => void;
+	/** Rider reports of places to avoid (protests, crowds, blocked roads). */
+	areaReports: Disruption[];
+	/** Report a place to avoid; needs an account. Resolves false when not possible. */
+	reportArea: (
+		kind: AreaReportKind,
+		at: { lat: number; lon: number },
+		note?: string,
+	) => Promise<boolean>;
 };
+export type AreaReportKind = "protest" | "event" | "blocked" | "emergency";
 export type Impact = { grams: number; trips: number };
 
 const AccountContext = createContext<Account | null>(null);
@@ -89,6 +99,8 @@ export function LocalAccountProvider({
 			value={{
 				impact: impact.impact,
 				logGreenTrip: impact.log,
+				areaReports: [],
+				reportArea: async () => false,
 				enabled: false,
 				status: "guest",
 				profile: local.profile,
@@ -119,6 +131,19 @@ export function ConvexAccountProvider({
 	const localImpact = useLocalImpact();
 	const remoteImpact = useQuery(api.travel.impact, signedIn ? {} : "skip");
 	const logRemote = useMutation(api.travel.logGreenTrip);
+	// Rounded to the minute so the reactive query isn't re-subscribed constantly.
+	const [minute, setMinute] = useState(
+		() => Math.floor(Date.now() / 60_000) * 60_000,
+	);
+	useEffect(() => {
+		const timer = setInterval(
+			() => setMinute(Math.floor(Date.now() / 60_000) * 60_000),
+			60_000,
+		);
+		return () => clearInterval(timer);
+	}, []);
+	const areaRows = useQuery(api.areaReports.active, { now: minute });
+	const reportRemote = useMutation(api.areaReports.report);
 	const status = auth.isLoading ? "loading" : signedIn ? "signed-in" : "guest";
 	return (
 		<AccountContext.Provider
@@ -148,9 +173,36 @@ export function ConvexAccountProvider({
 					if (signedIn) void logRemote({ mode, co2Saved });
 					else localImpact.log(mode, co2Saved);
 				},
+				areaReports: (areaRows ?? []).map(
+					(r): Disruption => ({
+						id: r.id,
+						kind: r.kind,
+						lat: r.lat,
+						lon: r.lon,
+						title: r.note || AREA_LABELS[r.kind],
+						detail: `Reported by ${r.reports} rider${r.reports === 1 ? "" : "s"}`,
+						start: null,
+						end: r.expiresAt,
+						source: "riders",
+						reports: r.reports,
+						reportedAt: r.reportedAt,
+					}),
+				),
+				reportArea: async (kind, at, note) => {
+					if (!signedIn) return false;
+					await reportRemote({ kind, lat: at.lat, lon: at.lon, note });
+					return true;
+				},
 			}}
 		>
 			{children}
 		</AccountContext.Provider>
 	);
 }
+
+const AREA_LABELS: Record<AreaReportKind, string> = {
+	protest: "Protest or rally",
+	event: "Big event crowds",
+	blocked: "Road blocked",
+	emergency: "Police or emergency",
+};

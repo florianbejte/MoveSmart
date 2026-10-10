@@ -22,6 +22,18 @@ export type TransitRide = {
 	stops: number;
 	live: boolean;
 	delaySeconds: number | null;
+	/** Q: how full the bus is likely to be (0–1), and where that comes from. */
+	crowding?: {
+		value: number;
+		source: "riders" | "route" | "typical";
+		reports: number;
+	};
+	/** D: expected minutes of extra delay beyond the shown time. */
+	expectedDelay?: {
+		minutes: number;
+		samples: number;
+		source: "learned" | "typical";
+	};
 };
 export type RideSearch = {
 	now: number;

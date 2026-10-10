@@ -3,26 +3,38 @@
 import {
 	ArrowLeft,
 	ArrowRight,
+	ArrowUpDown,
 	Bike,
 	BusFront,
 	Car,
 	CarTaxiFront,
 	ChevronDown,
+	Clock3,
+	CloudSun,
 	ExternalLink,
 	Footprints,
 	KeyRound,
 	Leaf,
 	LocateFixed,
 	MapPin,
+	Megaphone,
 	Navigation,
 	Pencil,
 	Radio,
 	Search,
 	Sparkles,
+	TriangleAlert,
+	Users,
 	X,
 	Zap,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import {
+	DISRUPTION_INFO,
+	type Disruption,
+	type TripImpact,
+	tripImpact,
+} from "@/lib/plan/disruptions";
 import type { GeocodeHit } from "@/lib/plan/geocode";
 import {
 	estimateOptions,
@@ -31,7 +43,8 @@ import {
 	type RankedOption,
 	rankOptions,
 	type Weather,
-	weatherFactor,
+	type Weights,
+	weightsFor,
 } from "@/lib/plan/options";
 import { sliceShape } from "@/lib/plan/paths";
 import { type Profile, persona, walkPace } from "@/lib/plan/profile";
@@ -40,7 +53,8 @@ import type { TransitRide } from "@/lib/plan/transit";
 import { distance } from "@/lib/transit/core";
 import { serviceColor } from "@/lib/transit/service-colors";
 import type { Position, Stop, TransitRoute } from "@/lib/transit/types";
-import { useAccount } from "../account";
+import { type AreaReportKind, useAccount } from "../account";
+import { FormulaDetails } from "./formula";
 import { useTransit } from "./use-transit";
 
 type Place = Position & { name: string };
@@ -52,6 +66,14 @@ export type PlanPath = {
 	/** The buses being taken, so the map can show only those. */
 	rides?: { routeId: string; tripId: string }[];
 	stopIds?: string[];
+	/** Places to avoid near the trip, drawn as zones. */
+	avoid?: {
+		lat: number;
+		lon: number;
+		radius: number;
+		avoid: boolean;
+		title: string;
+	}[];
 	segments: {
 		kind: "walk" | "ride";
 		color: string;
@@ -100,6 +122,7 @@ type NamedRide = TransitRide & {
 type PlanResponse = {
 	rides: NamedRide[];
 	transfers?: { legs: [NamedRide, NamedRide] }[];
+	disruptions?: Disruption[];
 	weather: Weather | null;
 	stale: boolean;
 	walkingApproximate?: boolean;
@@ -158,6 +181,10 @@ export function TripPlanner({
 	const account = useAccount();
 	const [query, setQuery] = useState("");
 	const [to, setTo] = useState<Place | null>(null);
+	// A typed start point; null means "where I am" (my location, or the city centre).
+	const [fromPlace, setFromPlace] = useState<Place | null>(null);
+	const [editingFrom, setEditingFrom] = useState(false);
+	const [fromQuery, setFromQuery] = useState("");
 	// The start is fixed when the destination is chosen, so panning the map to the route
 	// doesn't re-plan the trip; a new location fix does.
 	const [start, setStart] = useState<Position>(origin);
@@ -165,57 +192,39 @@ export function TripPlanner({
 	const [going, setGoing] = useState<string | null>(null);
 	function choose(place: Place) {
 		setTo(place);
-		setStart(origin);
+		setStart(fromPlace ?? origin);
 		setGoing(null);
 		onPlace(place);
 	}
+	function chooseFrom(place: Place | null) {
+		setFromPlace(place);
+		setStart(place ?? origin);
+		setEditingFrom(false);
+		setFromQuery("");
+		setGoing(null);
+		if (!place) onLocate();
+	}
+	function swap() {
+		if (!to) return;
+		const here = fromPlace ?? {
+			name: usingLocation ? "My location" : "City centre",
+			...start,
+		};
+		setFromPlace(to);
+		setStart(to);
+		setTo(here);
+		setGoing(null);
+	}
 	// biome-ignore lint/correctness/useExhaustiveDependencies: only a new location fix should move the start.
 	useEffect(() => {
-		if (usingLocation) setStart(origin);
+		if (usingLocation && !fromPlace) setStart(origin);
 	}, [usingLocation, origin.lat, origin.lon]);
 	const [travelMode, setTravelMode] = useState("transit");
 	const [showMore, setShowMore] = useState(false);
 	const [maxWalk, setMaxWalk] = useState(20);
 	const [showExcluded, setShowExcluded] = useState(false);
-	const suggestions = useMemo(() => {
-		const needle = fold(query.trim());
-		if (needle.length < 2) return [];
-		const seen = new Set<string>();
-		return stops
-			.filter((s) => fold(s.name).includes(needle))
-			.filter((s) => !seen.has(s.name) && seen.add(s.name))
-			.slice(0, 3);
-	}, [stops, query]);
-	// Addresses and places, looked up after a short pause in typing.
-	const [lookup, setLookup] = useState<{
-		query: string;
-		hits: GeocodeHit[];
-		error?: boolean;
-	}>({ query: "", hits: [] });
-	useEffect(() => {
-		const q = query.trim();
-		if (q.length < 3) return;
-		const controller = new AbortController();
-		const timer = setTimeout(async () => {
-			try {
-				const response = await fetch(
-					`/api/geocode?q=${encodeURIComponent(q)}`,
-					{ signal: controller.signal },
-				);
-				if (!response.ok) throw new Error("Geocoding failed");
-				const { hits } = (await response.json()) as { hits: GeocodeHit[] };
-				setLookup({ query: q, hits });
-			} catch {
-				if (!controller.signal.aborted)
-					setLookup({ query: q, hits: [], error: true });
-			}
-		}, 300);
-		return () => {
-			clearTimeout(timer);
-			controller.abort();
-		};
-	}, [query]);
-	const searching = query.trim().length >= 3 && lookup.query !== query.trim();
+	const toSearch = usePlaceSearch(query, stops);
+	const fromSearch = usePlaceSearch(fromQuery, stops);
 	const from = {
 		lat: Math.round(start.lat * 2000) / 2000,
 		lon: Math.round(start.lon * 2000) / 2000,
@@ -227,22 +236,45 @@ export function TripPlanner({
 		60_000,
 	);
 	const routeName = (id: string) => routes.get(id)?.name ?? "";
-	const ranked = useMemo(() => {
-		if (!to || !plan.data) return [];
-		return rankOptions(
-			estimateOptions({
-				from: start,
-				to,
-				now: plan.data.generatedAt,
-				rides: plan.data.rides,
-				transfers: plan.data.transfers,
-				routeName: (id) => routes.get(id)?.name ?? "",
-				profile,
-			}),
+	// Official closures and incidents plus rider reports (protests, crowds, blocked roads).
+	const disruptions = useMemo(
+		() => [...(plan.data?.disruptions ?? []), ...account.areaReports],
+		[plan.data, account.areaReports],
+	);
+	const { ranked, impact } = useMemo(() => {
+		if (!to || !plan.data) return { ranked: [], impact: null };
+		const options = estimateOptions({
+			from: start,
+			to,
+			now: plan.data.generatedAt,
+			rides: plan.data.rides,
+			transfers: plan.data.transfers,
+			routeName: (id) => routes.get(id)?.name ?? "",
 			profile,
-			plan.data.weather,
+		});
+		const impact = tripImpact(
+			{ from: start, to },
+			options,
+			disruptions,
+			plan.data.generatedAt,
+			(id) => stops.find((s) => s.id === id),
+			(id) => routes.get(id)?.name ?? "",
 		);
-	}, [to, plan.data, profile, start, routes]);
+		for (const o of options) {
+			const hit = impact.options.get(o.id);
+			if (hit)
+				o.disruption = {
+					minutes: hit.minutes,
+					titles: hit.found.map(
+						(d) => `${DISRUPTION_INFO[d.kind].label}: ${d.title}`,
+					),
+				};
+		}
+		return {
+			ranked: rankOptions(options, profile, plan.data.weather),
+			impact,
+		};
+	}, [to, plan.data, profile, start, routes, disruptions, stops]);
 	const usable = ranked.filter((o) => !o.excluded);
 	const filteredOptions = usable.filter(
 		(o) =>
@@ -265,12 +297,28 @@ export function TripPlanner({
 		named.set(legKey(r), r);
 	const excluded = ranked.filter((o) => o.excluded);
 	const weather = plan.data?.weather ?? null;
-	const wf = weatherFactor(weather, profile.weatherSensitive);
+	const weights = weightsFor(profile, weather);
+
 	const tooClose = to && distance(start, to) < 150;
 	const selected = usable.find((o) => o.id === going);
 	const stage = selected && !hidden ? "map" : "choose";
 	// biome-ignore lint/correctness/useExhaustiveDependencies: onStage is a stable state setter.
 	useEffect(() => onStage(stage), [stage]);
+	const zones = useMemo(() => {
+		if (!impact) return [];
+		const found = [
+			...impact.destination,
+			...impact.start,
+			...(selected ? (impact.options.get(selected.id)?.found ?? []) : []),
+		];
+		return [...new Map(found.map((d) => [d.id, d])).values()].map((d) => ({
+			lat: d.lat,
+			lon: d.lon,
+			radius: DISRUPTION_INFO[d.kind].radius,
+			avoid: DISRUPTION_INFO[d.kind].advice === "avoid",
+			title: `${DISRUPTION_INFO[d.kind].label}: ${d.title}`,
+		}));
+	}, [impact, selected]);
 	const selectedKey = selected
 		? `${selected.id}:${pt(start)}:${to ? pt(to) : ""}`
 		: "";
@@ -350,6 +398,7 @@ export function TripPlanner({
 					to,
 					rides: legs.map(({ routeId, tripId }) => ({ routeId, tripId })),
 					stopIds: legs.flatMap((l) => [l.fromStopId, l.toStopId]),
+					avoid: zones,
 					segments,
 				});
 				return;
@@ -364,6 +413,7 @@ export function TripPlanner({
 				key: selectedKey,
 				from: start,
 				to,
+				avoid: zones,
 				segments: [
 					{
 						kind: selected.mode === "walk" ? "walk" : "ride",
@@ -380,21 +430,62 @@ export function TripPlanner({
 			<div className="plan-points">
 				<div className="plan-point">
 					<span className="point-dot from" />
-					<span className="point-text">
-						<small>From</small>
-						{usingLocation
-							? "My location"
-							: "City centre · tap ⌖ for your location"}
-					</span>
+					{editingFrom ? (
+						<label className="plan-search">
+							<Search size={16} />
+							<input
+								// biome-ignore lint/a11y/noAutofocus: the rider just asked to type a start point.
+								autoFocus
+								value={fromQuery}
+								onChange={(e) => setFromQuery(e.target.value)}
+								placeholder="From? Address, place or stop"
+								aria-label="Start point"
+							/>
+						</label>
+					) : (
+						<button
+							type="button"
+							className="point-text point-edit"
+							onClick={() => setEditingFrom(true)}
+							aria-label="Change start point"
+						>
+							<small>From</small>
+							{fromPlace?.name ??
+								(usingLocation ? "My location" : "City centre · tap to change")}
+						</button>
+					)}
+					{editingFrom ? (
+						<button
+							type="button"
+							onClick={() => {
+								setEditingFrom(false);
+								setFromQuery("");
+							}}
+							aria-label="Cancel"
+						>
+							<X size={16} />
+						</button>
+					) : (
+						<button
+							type="button"
+							onClick={() => chooseFrom(null)}
+							disabled={locating}
+							aria-label="Start from my location"
+						>
+							<LocateFixed size={16} className={locating ? "spin" : ""} />
+						</button>
+					)}
+				</div>
+				{to && !editingFrom && (
 					<button
 						type="button"
-						onClick={onLocate}
-						disabled={locating}
-						aria-label="Use my location"
+						className="plan-swap"
+						onClick={swap}
+						aria-label="Swap start and destination"
 					>
-						<LocateFixed size={16} className={locating ? "spin" : ""} />
+						<ArrowUpDown size={15} />
 					</button>
-				</div>
+				)}
 				<div className="plan-point">
 					<span className="point-dot to" />
 					{to ? (
@@ -522,59 +613,27 @@ export function TripPlanner({
 						budget. Try allowing a longer walk.
 					</p>
 				)}
-			{!to && places.length > 0 && !query && (
-				<div className="recent-places">
-					<span>Your places</span>
-					<div>
-						{places.map((p) => (
-							<button type="button" key={p.name} onClick={() => choose(p)}>
-								<MapPin size={13} />
-								{p.name}
-							</button>
-						))}
-					</div>
+			{editingFrom && (
+				<div className="plan-suggestions">
+					<button type="button" onClick={() => chooseFrom(null)}>
+						<LocateFixed size={15} />
+						<span className="suggestion-text">
+							<span>My current location</span>
+							<small>Uses your device’s location</small>
+						</span>
+					</button>
+					{!fromQuery && places.length > 0 && (
+						<RecentPlaces places={places} onChoose={chooseFrom} />
+					)}
+					<Suggestions search={fromSearch} onChoose={chooseFrom} />
 				</div>
 			)}
-			{!to && (
+			{!to && !editingFrom && (
 				<div className="plan-suggestions">
-					{query.trim().length >= 3 &&
-						lookup.query === query.trim() &&
-						lookup.hits.map((h) => (
-							<button
-								type="button"
-								key={`${h.name}-${h.lat}-${h.lon}`}
-								onClick={() => choose({ name: h.name, lat: h.lat, lon: h.lon })}
-							>
-								<Navigation size={15} />
-								<span className="suggestion-text">
-									<span>{h.name}</span>
-									<small>
-										{[h.detail, h.kind].filter(Boolean).join(" · ")}
-									</small>
-								</span>
-							</button>
-						))}
-					{searching && (
-						<p className="loading-text">Searching addresses and places…</p>
+					{!query && places.length > 0 && (
+						<RecentPlaces places={places} onChoose={choose} />
 					)}
-					{lookup.error && lookup.query === query.trim() && (
-						<p className="helper-text">
-							Address search is unavailable right now — stops still work.
-						</p>
-					)}
-					{suggestions.map((s) => (
-						<button
-							type="button"
-							key={s.id}
-							onClick={() => choose({ name: s.name, lat: s.lat, lon: s.lon })}
-						>
-							<BusFront size={15} />
-							<span className="suggestion-text">
-								<span>{s.name}</span>
-								<small>Stop</small>
-							</span>
-						</button>
-					))}
+					<Suggestions search={toSearch} onChoose={choose} />
 					<p className="helper-text">
 						We compare walking, bikes, scooters, live buses, driving and taxis —
 						and rank them for you.
@@ -597,13 +656,14 @@ export function TripPlanner({
 			)}
 			{to && !tooClose && plan.data && (
 				<>
-					{wf.reasons.length > 0 && (
-						<p className="notice">
-							{wf.reasons.join(", ")[0].toUpperCase() +
-								wf.reasons.join(", ").slice(1)}{" "}
-							— time outdoors counts {Math.round((wf.factor - 1) * 100)}% more
-							for you.
-						</p>
+					{impact && <TripAdvice impact={impact} />}
+					{!selected && (
+						<TripConditions
+							weather={weather}
+							weights={weights}
+							options={usable}
+							impact={impact}
+						/>
 					)}
 					{selected && (
 						<button
@@ -627,6 +687,11 @@ export function TripPlanner({
 						<p className="notice">
 							No {travelMode === "all" ? "suitable" : travelMode} journeys
 							found. Try another mode or adjust Trip options.
+						</p>
+					)}
+					{!selected && usable.length > 0 && (
+						<p className="formula-lead">
+							Ranked for your needs and answers — with greener ways first.
 						</p>
 					)}
 					<ol className="plan-options">
@@ -656,6 +721,8 @@ export function TripPlanner({
 								)}
 								routes={routes}
 								going={o.id === selected?.id}
+								weights={weights}
+								runnerUp={i === 0 ? usable[1] : usable[0]}
 								onGo={() => {
 									setGoing(o.id);
 									if (o.green) account.logGreenTrip(o.mode, o.co2Saved);
@@ -703,6 +770,15 @@ export function TripPlanner({
 							)}
 						</div>
 					)}
+					<ReportTrouble
+						places={[
+							{ label: `Near ${to.name}`, at: to },
+							{
+								label: usingLocation ? "Where I am now" : "Where I start",
+								at: start,
+							},
+						]}
+					/>
 					<details className="journey-settings">
 						<summary>About these results</summary>
 						<p className="helper-text">
@@ -726,6 +802,8 @@ function OptionCard({
 	legs,
 	routes,
 	going,
+	weights,
+	runnerUp,
 	onGo,
 	trip,
 }: {
@@ -736,6 +814,9 @@ function OptionCard({
 	legs?: NamedRide[];
 	routes: Map<string, TransitRoute>;
 	going: boolean;
+	weights: Weights;
+
+	runnerUp?: RankedOption;
 	onGo: () => void;
 	trip: { from: Position; to: Place };
 }) {
@@ -926,6 +1007,7 @@ function OptionCard({
 					</span>
 				)}
 			</div>
+
 			{legs && legs.length > 0 && <Itinerary legs={legs} routes={routes} />}
 			{o.reasons.length > 0 && (
 				<ul className="plan-reasons">
@@ -934,6 +1016,20 @@ function OptionCard({
 					))}
 				</ul>
 			)}
+			{o.disruption && (
+				<div className="trouble">
+					<TriangleAlert size={14} />
+					<span>
+						<strong>
+							Trouble on the way · about +{o.disruption.minutes} min
+						</strong>
+						{o.disruption.titles.slice(0, 3).map((t) => (
+							<small key={t}>{t}</small>
+						))}
+					</span>
+				</div>
+			)}
+			<FormulaDetails option={o} weights={weights} runnerUp={runnerUp} />
 			{going && o.green && o.co2Saved >= 50 && (
 				<p className="impact-thanks">
 					<Leaf size={15} />
@@ -1116,5 +1212,383 @@ function Itinerary({
 				</span>
 			</li>
 		</ol>
+	);
+}
+
+const ago = (at?: number) => {
+	if (!at) return "";
+	const min = Math.max(1, Math.round((Date.now() - at) / 60_000));
+	return min < 60 ? `${min} min ago` : `${Math.round(min / 60)} h ago`;
+};
+const until = new Intl.DateTimeFormat("en-GB", {
+	timeZone: "Europe/Vilnius",
+	day: "numeric",
+	month: "short",
+	hour: "2-digit",
+	minute: "2-digit",
+});
+
+/** Advice when something to avoid is at the destination or the start. */
+function TripAdvice({ impact }: { impact: TripImpact }) {
+	const places = [
+		...impact.destination.map((d) => ({ d, where: "your destination" })),
+		...impact.start.map((d) => ({ d, where: "where you start" })),
+	];
+	if (!places.length) return null;
+	const avoid = places.filter(
+		({ d }) => DISRUPTION_INFO[d.kind].advice === "avoid",
+	);
+	const [{ d: worst, where }] = avoid.length ? avoid : places;
+	const info = DISRUPTION_INFO[worst.kind];
+	return (
+		<div
+			className={`trip-advice ${info.advice === "avoid" ? "avoid" : ""}`}
+			role="alert"
+		>
+			<TriangleAlert size={18} />
+			<div>
+				<strong>
+					{info.advice === "avoid"
+						? `Avoid if you can: ${info.label.toLowerCase()} near ${where}`
+						: `${info.label} near ${where}`}
+				</strong>
+				<p>
+					{worst.title}
+					{worst.source === "riders"
+						? ` · reported by ${worst.reports ?? 1} rider${(worst.reports ?? 1) === 1 ? "" : "s"}, ${ago(worst.reportedAt)}`
+						: worst.end
+							? ` · official, until ${until.format(worst.end)}`
+							: " · official"}
+				</p>
+				<p>
+					{info.advice === "avoid"
+						? "Consider going later or meeting somewhere else. If you need to go, take public transport or walk — nearby roads may be closed and taxis can get stuck."
+						: "Drivers may need a detour. Public transport and walking are usually less affected."}
+				</p>
+				{places.length > 1 && (
+					<small>
+						Also nearby:{" "}
+						{places
+							.filter((p) => p.d !== worst)
+							.slice(0, 3)
+							.map((p) => p.d.title)
+							.join(" · ")}
+					</small>
+				)}
+			</div>
+		</div>
+	);
+}
+
+const REPORT_KINDS: { kind: AreaReportKind; label: string }[] = [
+	{ kind: "protest", label: "Protest or rally" },
+	{ kind: "event", label: "Big event crowds" },
+	{ kind: "blocked", label: "Road blocked" },
+	{ kind: "emergency", label: "Police or emergency" },
+];
+
+/** Waze-style: riders flag what official feeds don't publish, like protests. */
+function ReportTrouble({
+	places,
+}: {
+	places: { label: string; at: Position }[];
+}) {
+	const account = useAccount();
+	const [open, setOpen] = useState(false);
+	const [kind, setKind] = useState<AreaReportKind>("protest");
+	const [state, setState] = useState<"idle" | "sending" | "sent" | "error">(
+		"idle",
+	);
+	if (!account.enabled) return null;
+	return (
+		<div className="report-trouble">
+			<button
+				type="button"
+				className="report-trouble-toggle"
+				aria-expanded={open}
+				onClick={() => setOpen(!open)}
+			>
+				<Megaphone size={15} />
+				See a protest, crowd or blocked road? Warn others
+			</button>
+			{open &&
+				(account.status !== "signed-in" ? (
+					<p className="helper-text">
+						<a href="/dashboard?mode=signin">Sign in</a> to report — it keeps
+						reports trustworthy.
+					</p>
+				) : state === "sent" ? (
+					<p className="impact-thanks">
+						Thanks — riders planning trips nearby will be warned for the next 3
+						hours.
+					</p>
+				) : (
+					<div className="report-trouble-panel">
+						<div className="report-kinds">
+							{REPORT_KINDS.map((k) => (
+								<button
+									type="button"
+									key={k.kind}
+									aria-pressed={kind === k.kind}
+									onClick={() => setKind(k.kind)}
+								>
+									{k.label}
+								</button>
+							))}
+						</div>
+						<small>Where?</small>
+						<div className="report-places">
+							{places.map((p) => (
+								<button
+									type="button"
+									key={p.label}
+									disabled={state === "sending"}
+									onClick={async () => {
+										setState("sending");
+										try {
+											setState(
+												(await account.reportArea(kind, p.at))
+													? "sent"
+													: "error",
+											);
+										} catch {
+											setState("error");
+										}
+									}}
+								>
+									<MapPin size={13} />
+									{p.label}
+								</button>
+							))}
+						</div>
+						{state === "error" && (
+							<p className="helper-text">
+								Couldn’t send the report. Try again.
+							</p>
+						)}
+					</div>
+				))}
+		</div>
+	);
+}
+
+type PlaceSearch = ReturnType<typeof usePlaceSearch>;
+/** Stops by name, plus addresses and places looked up after a short pause in typing. */
+function usePlaceSearch(query: string, stops: Stop[]) {
+	const stopHits = useMemo(() => {
+		const needle = fold(query.trim());
+		if (needle.length < 2) return [];
+		const seen = new Set<string>();
+		return stops
+			.filter((s) => fold(s.name).includes(needle))
+			.filter((s) => !seen.has(s.name) && seen.add(s.name))
+			.slice(0, 3);
+	}, [stops, query]);
+	const [lookup, setLookup] = useState<{
+		query: string;
+		hits: GeocodeHit[];
+		error?: boolean;
+	}>({ query: "", hits: [] });
+	useEffect(() => {
+		const q = query.trim();
+		if (q.length < 3) return;
+		const controller = new AbortController();
+		const timer = setTimeout(async () => {
+			try {
+				const response = await fetch(
+					`/api/geocode?q=${encodeURIComponent(q)}`,
+					{ signal: controller.signal },
+				);
+				if (!response.ok) throw new Error("Geocoding failed");
+				const { hits } = (await response.json()) as { hits: GeocodeHit[] };
+				setLookup({ query: q, hits });
+			} catch {
+				if (!controller.signal.aborted)
+					setLookup({ query: q, hits: [], error: true });
+			}
+		}, 300);
+		return () => {
+			clearTimeout(timer);
+			controller.abort();
+		};
+	}, [query]);
+	const q = query.trim();
+	return {
+		stops: stopHits,
+		places: q.length >= 3 && lookup.query === q ? lookup.hits : [],
+		searching: q.length >= 3 && lookup.query !== q,
+		error: !!lookup.error && lookup.query === q,
+	};
+}
+
+function Suggestions({
+	search,
+	onChoose,
+}: {
+	search: PlaceSearch;
+	onChoose: (place: Place) => void;
+}) {
+	return (
+		<>
+			{search.places.map((h) => (
+				<button
+					type="button"
+					key={`${h.name}-${h.lat}-${h.lon}`}
+					onClick={() => onChoose({ name: h.name, lat: h.lat, lon: h.lon })}
+				>
+					<Navigation size={15} />
+					<span className="suggestion-text">
+						<span>{h.name}</span>
+						<small>{[h.detail, h.kind].filter(Boolean).join(" · ")}</small>
+					</span>
+				</button>
+			))}
+			{search.searching && (
+				<p className="loading-text">Searching addresses and places…</p>
+			)}
+			{search.error && (
+				<p className="helper-text">
+					Address search is unavailable right now — stops still work.
+				</p>
+			)}
+			{search.stops.map((s) => (
+				<button
+					type="button"
+					key={s.id}
+					onClick={() => onChoose({ name: s.name, lat: s.lat, lon: s.lon })}
+				>
+					<BusFront size={15} />
+					<span className="suggestion-text">
+						<span>{s.name}</span>
+						<small>Stop</small>
+					</span>
+				</button>
+			))}
+		</>
+	);
+}
+
+function RecentPlaces({
+	places,
+	onChoose,
+}: {
+	places: Place[];
+	onChoose: (place: Place) => void;
+}) {
+	return (
+		<div className="recent-places">
+			<span>Your places</span>
+			<div>
+				{places.map((p) => (
+					<button type="button" key={p.name} onClick={() => onChoose(p)}>
+						<MapPin size={13} />
+						{p.name}
+					</button>
+				))}
+			</div>
+		</div>
+	);
+}
+
+const crowdLabel = (q: number) =>
+	q < 0.25 ? "Quiet" : q < 0.5 ? "Moderate" : q < 0.8 ? "Busy" : "Packed";
+function weatherText(w: Weather) {
+	const c = w.condition.replace(/-/g, " ");
+	return `${Math.round(w.temperature)}° · ${c || "—"}${w.precipitation > 0.2 ? ` · ${w.precipitation} mm rain` : ""}`;
+}
+
+/** The live inputs to the rider's formula, so they can see what the ranking is based on. */
+function TripConditions({
+	weather,
+	weights,
+	options,
+	impact,
+}: {
+	weather: Weather | null;
+	weights: Weights;
+	options: RankedOption[];
+	impact: TripImpact | null;
+}) {
+	const legs = options.flatMap((o) => o.legs ?? []);
+	const crowd = legs.find((l) => l.crowding)?.crowding;
+	const learned = legs
+		.map((l) => l.expectedDelay)
+		.filter((d) => d?.source === "learned");
+	const delay = legs.find((l) => l.expectedDelay)?.expectedDelay;
+	const trouble = new Map(
+		[
+			...(impact?.destination ?? []),
+			...(impact?.start ?? []),
+			...[...(impact?.options.values() ?? [])].flatMap((x) => x.found),
+		].map((d) => [d.id, d]),
+	);
+	const fromRiders = [...trouble.values()].filter((d) => d.source === "riders");
+	return (
+		<section className="trip-conditions" aria-label="Conditions now">
+			<h3>Conditions now · what your ranking is based on</h3>
+			<dl>
+				<div>
+					<dt>
+						<CloudSun size={15} /> Weather
+					</dt>
+					<dd>
+						{weather ? weatherText(weather) : "Unavailable"}
+						<small>
+							{weights.m > 1
+								? `Walking & cycling count ${weights.m}× (${weights.weather.join(", ")})`
+								: "Good for walking — no weather penalty (m(W) = 1)"}
+						</small>
+					</dd>
+				</div>
+				<div>
+					<dt>
+						<Users size={15} /> Crowding
+					</dt>
+					<dd>
+						{crowd ? crowdLabel(crowd.value) : "—"}
+						<small>
+							{crowd?.source === "riders"
+								? `Reported by ${crowd.reports} rider${crowd.reports === 1 ? "" : "s"} on your bus`
+								: crowd?.source === "route"
+									? "From rider reports on this route"
+									: "Typical for this time of day"}
+						</small>
+					</dd>
+				</div>
+				<div>
+					<dt>
+						<Clock3 size={15} /> Delays
+					</dt>
+					<dd>
+						{delay ? `~${delay.minutes} min expected` : "—"}
+						<small>
+							{learned.length
+								? `Learned from ${Math.max(...learned.map((d) => d?.samples ?? 0))} live GPS readings`
+								: "Live bus positions; still learning this route’s usual delay"}
+						</small>
+					</dd>
+				</div>
+				<div>
+					<dt>
+						<TriangleAlert size={15} /> Disruptions
+					</dt>
+					<dd>
+						{trouble.size
+							? `${trouble.size} near your trip`
+							: "None near your trip"}
+						<small>
+							{fromRiders.length
+								? `${fromRiders.length} reported by riders · rest official`
+								: "Official closures, roadworks & incidents"}
+						</small>
+					</dd>
+				</div>
+			</dl>
+			<p className="trip-conditions-weights">
+				Your weights: walking α {weights.alpha} · waiting β {weights.beta} ·
+				change γ {weights.gamma} min · crowding δ {weights.delta} · delay η{" "}
+				{weights.eta}
+			</p>
+		</section>
 	);
 }
