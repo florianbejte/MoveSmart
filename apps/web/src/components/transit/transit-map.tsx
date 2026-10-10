@@ -21,6 +21,7 @@ import {
 } from "@/lib/transit/city";
 import { cityPopupContent } from "./city-popup";
 import { mapSymbolImage } from "./map-symbol";
+import { vehiclePopupContent } from "./vehicle-popup";
 
 type Props = {
 	city: CityCollection;
@@ -44,6 +45,9 @@ export default function TransitMap(props: Props) {
 	const container = useRef<HTMLElement>(null);
 	const map = useRef<maplibregl.Map | null>(null);
 	const markers = useRef(new Map<string, maplibregl.Marker>());
+	const vehiclePopup = useRef<{ id: string; popup: maplibregl.Popup } | null>(
+		null,
+	);
 	const userMarker = useRef<maplibregl.Marker | null>(null);
 	const handlers = useRef(props);
 	const cityPopup = useRef<{
@@ -60,6 +64,16 @@ export default function TransitMap(props: Props) {
 	useEffect(() => {
 		if (!container.current) return;
 		setReady(false);
+		let focusTimer: ReturnType<typeof setTimeout> | undefined;
+		let pendingCityFocus: (() => void) | null = null;
+		const focusAfterLayout = () => {
+			clearTimeout(focusTimer);
+			focusTimer = setTimeout(() => {
+				const focus = pendingCityFocus;
+				pendingCityFocus = null;
+				focus?.();
+			}, 150);
+		};
 		let instance: maplibregl.Map;
 		try {
 			maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -103,7 +117,10 @@ export default function TransitMap(props: Props) {
 			return;
 		}
 		const closeOnEscape = (event: KeyboardEvent) => {
-			if (event.key === "Escape") cityPopup.current?.popup.remove();
+			if (event.key === "Escape") {
+				cityPopup.current?.popup.remove();
+				vehiclePopup.current?.popup.remove();
+			}
 		};
 		instance.getContainer().addEventListener("keydown", closeOnEscape);
 		map.current = instance;
@@ -254,18 +271,22 @@ export default function TransitMap(props: Props) {
 					if (cityPopup.current?.popup === popup) cityPopup.current = null;
 				});
 				if (pinned) {
-					// Pin before moving: map motion should dismiss previews, not this detail.
-					instance.flyTo({
-						center: popup.getLngLat(),
-						zoom: Math.max(instance.getZoom(), 16),
-						offset: window.matchMedia("(min-width: 900px)").matches
-							? [180, 80]
-							: [0, 80],
-						duration: window.matchMedia("(prefers-reduced-motion: reduce)")
-							.matches
-							? 0
-							: 800,
-					});
+					// Closing the sheet resizes the map. Wait for layout to settle before flying.
+					pendingCityFocus = () => {
+						if (cityPopup.current?.popup !== popup) return;
+						instance.flyTo({
+							center: popup.getLngLat(),
+							zoom: Math.max(instance.getZoom(), 16),
+							offset: window.matchMedia("(min-width: 900px)").matches
+								? [180, 80]
+								: [0, 80],
+							duration: window.matchMedia("(prefers-reduced-motion: reduce)")
+								.matches
+								? 0
+								: 800,
+						});
+					};
+					focusAfterLayout();
 				}
 			};
 			instance.on("click", (e) => showCity(e, true));
@@ -274,6 +295,7 @@ export default function TransitMap(props: Props) {
 			});
 			instance.on("mouseout", dismissHover);
 			instance.on("movestart", dismissHover);
+			instance.on("movestart", () => vehiclePopup.current?.popup.remove());
 			instance.addSource("route", {
 				type: "geojson",
 				data: { type: "FeatureCollection", features: [] },
@@ -337,11 +359,17 @@ export default function TransitMap(props: Props) {
 			const center = instance.getCenter();
 			handlers.current.onCenter({ lat: center.lat, lon: center.lng });
 		});
-		const observer = new ResizeObserver(() => instance.resize());
+		const observer = new ResizeObserver(() => {
+			instance.resize();
+			if (pendingCityFocus) focusAfterLayout();
+		});
 		observer.observe(container.current);
 		return () => {
+			clearTimeout(focusTimer);
+			pendingCityFocus = null;
 			instance.getContainer().removeEventListener("keydown", closeOnEscape);
 			cityPopup.current?.popup.remove();
+			vehiclePopup.current?.popup.remove();
 			observer.disconnect();
 			instance.remove();
 			map.current = null;
@@ -425,9 +453,45 @@ export default function TransitMap(props: Props) {
 			if (!marker) {
 				const button = document.createElement("button");
 				button.type = "button";
-				button.addEventListener("click", () =>
-					handlers.current.onVehicle(vehicle.id),
-				);
+				const hidePreview = () => {
+					if (vehiclePopup.current?.id === vehicle.id)
+						vehiclePopup.current.popup.remove();
+				};
+				const showPreview = () => {
+					const current = handlers.current;
+					const latest = current.vehicles.find((v) => v.id === vehicle.id);
+					if (!latest || !map.current || map.current.isMoving()) return;
+					vehiclePopup.current?.popup.remove();
+					if (!cityPopup.current?.pinned) cityPopup.current?.popup.remove();
+					const popup = new maplibregl.Popup({
+						closeButton: false,
+						closeOnClick: false,
+						focusAfterOpen: false,
+						offset: 22,
+						maxWidth: "280px",
+						className: "city-map-popup is-preview vehicle-map-popup",
+					})
+						.setLngLat([latest.lon, latest.lat])
+						.setDOMContent(
+							vehiclePopupContent(latest, current.now, current.stale),
+						)
+						.addTo(map.current);
+					vehiclePopup.current = { id: latest.id, popup };
+					popup.on("close", () => {
+						if (vehiclePopup.current?.popup === popup)
+							vehiclePopup.current = null;
+					});
+				};
+				button.addEventListener("pointerenter", (event) => {
+					if (event.pointerType !== "touch") showPreview();
+				});
+				button.addEventListener("pointerleave", hidePreview);
+				button.addEventListener("focus", showPreview);
+				button.addEventListener("blur", hidePreview);
+				button.addEventListener("click", () => {
+					hidePreview();
+					handlers.current.onVehicle(vehicle.id);
+				});
 				marker = new maplibregl.Marker({ element: button })
 					.setLngLat([vehicle.lon, vehicle.lat])
 					.addTo(map.current);
@@ -455,8 +519,17 @@ export default function TransitMap(props: Props) {
 				"aria-label",
 				`${vehicle.mode === "bus" ? "Bus" : "Trolleybus"} ${vehicle.route} to ${vehicle.destination}, vehicle ${vehicle.number}`,
 			);
-			button.title = `${vehicle.route} → ${vehicle.destination}`;
+			// Custom hover preview replaces the browser title tooltip.
 			button.style.setProperty("--heading", `${vehicle.heading}deg`);
+		}
+		const preview = vehiclePopup.current;
+		if (preview) {
+			const latest = props.vehicles.find((v) => v.id === preview.id);
+			if (!latest) preview.popup.remove();
+			else
+				preview.popup
+					.setLngLat([latest.lon, latest.lat])
+					.setDOMContent(vehiclePopupContent(latest, props.now, props.stale));
 		}
 	}, [
 		ready,
