@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
+import { reportOrigin } from "@/lib/reports/origin";
 import {
 	getIssues,
 	getReports,
@@ -31,7 +32,8 @@ export async function GET() {
 	}
 }
 export async function POST(request: Request) {
-	if (request.headers.get("origin") !== new URL(request.url).origin)
+	const origin = reportOrigin(request);
+	if (!origin)
 		return Response.json(
 			{ error: "Please report from this site." },
 			{ status: 403, headers },
@@ -72,7 +74,7 @@ export async function POST(request: Request) {
 	jar.set("movesmart-reporter", reporter, {
 		httpOnly: true,
 		sameSite: "strict",
-		secure: new URL(request.url).protocol === "https:",
+		secure: origin.protocol === "https:",
 		path: "/",
 		maxAge: 86400 * 30,
 	});
