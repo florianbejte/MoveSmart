@@ -29,6 +29,7 @@ import {
 import { distance, freshVehicle } from "@/lib/transit/core";
 import type { Stop, TransitRoute, Vehicle } from "@/lib/transit/types";
 import "./community-tools.css";
+import { CrowdingIcon } from "./crowding-icon";
 export function DepartureCrowding({
 	report,
 	now,
@@ -40,9 +41,12 @@ export function DepartureCrowding({
 
 	const item = CROWDING.find((c) => c.id === report?.level);
 	return item && report ? (
-		<small className="departure-crowding" style={{ color: item.color }}>
-			{t("Community · ")}
-			{t(item.label)} ·{t(" ")}
+		<small
+			className="departure-crowding"
+			style={{ color: item.color }}
+			title={t(`Community report · ${item.label}`)}
+		>
+			<CrowdingIcon level={item.id} size={14} />
 			{t(Math.max(1, Math.floor((now - report.updatedAt) / 60000)))}
 			{t("m ago")}
 		</small>

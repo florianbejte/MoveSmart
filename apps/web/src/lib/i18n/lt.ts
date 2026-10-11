@@ -925,8 +925,48 @@ export const lithuanian: Record<string, string> = {
 	"Sheltered from the cold": "Apsaugota nuo šalčio",
 	"Sheltered from the wind": "Apsaugota nuo vėjo",
 	"Sheltered from the bad weather": "Apsaugota nuo blogo oro",
+	Quiet: "Laisva",
+	Busy: "Daug keleivių",
+	Packed: "Pilna",
+	"Why these options?": "Kodėl šie variantai?",
+	"From your answers": "Pagal jūsų atsakymus",
+	"Edit my answers": "Keisti atsakymus",
+	"Conditions right now": "Sąlygos dabar",
+	"You want the fastest trip, so door-to-door time counts most.":
+		"Norite greičiausios kelionės, todėl svarbiausia – visa kelionės trukmė.",
+	"You value comfort, so less walking, waiting and changing ranks higher.":
+		"Jums svarbus patogumas, todėl aukščiau – mažiau ėjimo, laukimo ir persėdimų.",
+	"You watch the cost, so cheaper ways rank higher.":
+		"Skaičiuojate išlaidas, todėl pigesni būdai – aukščiau.",
+	"You chose the greenest way, so low-CO₂ options come first.":
+		"Pasirinkote žaliausią būdą, todėl mažiausio CO₂ variantai – pirmi.",
+	"You want no surprises, so buses that usually run late rank lower.":
+		"Nenorite staigmenų, todėl dažnai vėluojantys autobusai – žemiau.",
+	"Step-free trips only, with as few changes as possible.":
+		"Tik kelionės be laiptų ir su kuo mažiau persėdimų.",
+	"With a stroller: step-free stops, fewer changes, less crowded buses.":
+		"Su vežimėliu: stotelės be laiptų, mažiau persėdimų, mažiau perpildyti autobusai.",
+	"Shorter, slower walks and simpler changes.":
+		"Trumpesni, lėtesni ėjimai ir paprastesni persėdimai.",
+	"With children: simpler trips with fewer changes.":
+		"Su vaikais: paprastesnės kelionės su mažiau persėdimų.",
+	"With luggage: less walking, no bikes or scooters.":
+		"Su bagažu: mažiau ėjimo, be dviračių ir paspirtukų.",
+	"You have a travel pass, so bus fares aren’t counted.":
+		"Turite bilietą-abonementą, todėl kelionės kaina neskaičiuojama.",
+	"You have a car, so driving and Park & Ride are compared too.":
+		"Turite automobilį, todėl lyginame ir važiavimą automobiliu bei „Statyk ir važiuok“.",
+	"No car, so we compare public transport, walking, bikes, taxis and car-sharing.":
+		"Neturite automobilio, todėl lyginame viešąjį transportą, ėjimą, dviračius, taksi ir dalijimosi automobilius.",
+	"Bad weather matters to you, so rain and cold make walking count more.":
+		"Jums svarbus oras, todėl per lietų ir šaltį ėjimas sveria daugiau.",
 };
 export const templates: Record<string, string> = {
+	"Ranked for {0}": "Pritaikyta: {0}",
+	"Walks up to {0} min — longer walks rank lower.":
+		"Ėjimas iki {0} min. – ilgesni ėjimai žemiau.",
+	"Crowding: {0}": "Užimtumas: {0}",
+	"Community report · {0}": "Bendruomenės pranešimas · {0}",
 	"Nothing gets you there by {0} any more. Try a later time.":
 		"Iki {0} jau niekaip nespėsite. Pasirinkite vėlesnį laiką.",
 	"across {0} green trips": "per {0} žalias keliones",

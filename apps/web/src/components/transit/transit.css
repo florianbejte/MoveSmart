@@ -3717,3 +3717,95 @@
 .demo-preferences p { font-size: 11px; line-height: 1.5; margin: 8px 0 0; }
 .demo-suitability { display: flex; flex-wrap: wrap; gap: 5px 8px; padding: 8px 0; font-size: 11px; color: #45602f; line-height: 1.4; }
 .demo-suitability strong { background: #edf3df; border-radius: 5px; padding: 1px 5px; }
+/* biome-ignore lint/style/noDescendingSpecificity: crowding people sit beside each bus badge */
+.journey-track .crowding-icon {
+	margin: 0 0 0 -2px;
+	flex: none;
+}
+/* "Why these options?": closed by default so the journeys stay on top. */
+/* biome-ignore lint/style/noDescendingSpecificity: why-panel is a separate container. */
+.trip-conditions summary {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	min-height: 44px;
+	cursor: pointer;
+	list-style: none;
+	color: var(--red);
+}
+.trip-conditions summary::-webkit-details-marker {
+	display: none;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: why-panel is a separate container. */
+.trip-conditions summary span {
+	display: grid;
+	flex: 1;
+	min-width: 0;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: why-panel is a separate container. */
+.trip-conditions summary strong {
+	font-size: 13px;
+	color: var(--ink);
+}
+/* biome-ignore lint/style/noDescendingSpecificity: why-panel is a separate container. */
+.trip-conditions summary small {
+	font-size: 11px;
+	color: var(--slate);
+}
+.trip-conditions-chevron {
+	color: var(--slate);
+	transition: transform 0.2s;
+}
+.trip-conditions[open] .trip-conditions-chevron {
+	transform: rotate(180deg);
+}
+.trip-conditions:not([open]) {
+	padding-block: 4px;
+}
+.trip-conditions[open] summary {
+	margin-bottom: 8px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: why-panel is a separate container. */
+.trip-conditions h3 {
+	margin-top: 12px;
+}
+.trip-reasons {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: grid;
+	gap: 6px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: why-panel is a separate container. */
+.trip-reasons li {
+	position: relative;
+	padding-left: 16px;
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--ink);
+}
+.trip-reasons li::before {
+	content: "";
+	position: absolute;
+	left: 2px;
+	top: 6px;
+	width: 7px;
+	height: 7px;
+	border-radius: 4px 4px 0 4px;
+	background: var(--red);
+}
+.trip-reasons-edit {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+	margin: 12px 0 4px;
+	padding: 0 14px;
+	border: 1.5px solid var(--red);
+	border-radius: 10px 10px 0 10px;
+	background: white;
+	color: var(--red);
+	font-size: 12px;
+	font-weight: 800;
+	cursor: pointer;
+}

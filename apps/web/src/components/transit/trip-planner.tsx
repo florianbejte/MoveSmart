@@ -70,6 +70,7 @@ import {
 	useAccount,
 } from "../account";
 import { TripCompanion } from "./companion";
+import { CrowdingIcon } from "./crowding-icon";
 import { FormulaDetails } from "./formula";
 import { useTransit } from "./use-transit";
 
@@ -891,6 +892,8 @@ export function TripPlanner({
 							weights={weights}
 							options={usable}
 							impact={impact}
+							profile={profile}
+							onEditProfile={onEditProfile}
 						/>
 					)}
 					{selected && (
@@ -1192,6 +1195,9 @@ function OptionCard({
 											<BusFront size={16} />
 											{t(routes.get(leg.routeId)?.name)}
 										</span>
+										{leg.crowding && (
+											<CrowdingIcon value={leg.crowding.value} size={15} />
+										)}
 									</Fragment>
 								))}
 								<span className="journey-dots" />
@@ -1570,6 +1576,9 @@ function Itinerary({
 							</span>
 							<span>
 								<span>
+									{leg.crowding && (
+										<CrowdingIcon value={leg.crowding.value} size={16} />
+									)}
 									<strong>
 										{t(route?.mode === "trolleybus" ? "Trolleybus" : "Bus")}
 										{t(" ")}
@@ -1899,11 +1908,49 @@ function RecentPlaces({
 	);
 }
 
-const crowdLabel = (q: number) =>
-	q < 0.25 ? "Quiet" : q < 0.5 ? "Moderate" : q < 0.8 ? "Busy" : "Packed";
 function weatherText(w: Weather) {
 	const c = w.condition.replace(/-/g, " ");
 	return `${Math.round(w.temperature)}° · ${c || "—"}${w.precipitation > 0.2 ? ` · ${w.precipitation} mm rain` : ""}`;
+}
+
+/** Plain-language reasons, one per questionnaire answer that shapes the ranking. */
+function profileReasons(p: Profile): string[] {
+	const reasons: string[] = [];
+	const priority: Record<string, string> = {
+		speed: "You want the fastest trip, so door-to-door time counts most.",
+		comfort:
+			"You value comfort, so less walking, waiting and changing ranks higher.",
+		cost: "You watch the cost, so cheaper ways rank higher.",
+		eco: "You chose the greenest way, so low-CO₂ options come first.",
+		certainty:
+			"You want no surprises, so buses that usually run late rank lower.",
+	};
+	for (const id of p.priorities) if (priority[id]) reasons.push(priority[id]);
+	if (p.needs.includes("wheelchair"))
+		reasons.push("Step-free trips only, with as few changes as possible.");
+	else if (p.needs.includes("stroller"))
+		reasons.push(
+			"With a stroller: step-free stops, fewer changes, less crowded buses.",
+		);
+	if (p.needs.includes("older"))
+		reasons.push("Shorter, slower walks and simpler changes.");
+	if (p.needs.includes("kids"))
+		reasons.push("With children: simpler trips with fewer changes.");
+	if (p.needs.includes("luggage"))
+		reasons.push("With luggage: less walking, no bikes or scooters.");
+	reasons.push(`Walks up to ${p.walkLimit} min — longer walks rank lower.`);
+	if (p.hasPass)
+		reasons.push("You have a travel pass, so bus fares aren’t counted.");
+	reasons.push(
+		p.hasCar
+			? "You have a car, so driving and Park & Ride are compared too."
+			: "No car, so we compare public transport, walking, bikes, taxis and car-sharing.",
+	);
+	if (p.weatherSensitive)
+		reasons.push(
+			"Bad weather matters to you, so rain and cold make walking count more.",
+		);
+	return reasons;
 }
 
 /** The live inputs to the rider's formula, so they can see what the ranking is based on. */
@@ -1912,11 +1959,15 @@ function TripConditions({
 	weights,
 	options,
 	impact,
+	profile,
+	onEditProfile,
 }: {
 	weather: Weather | null;
 	weights: Weights;
 	options: RankedOption[];
 	impact: TripImpact | null;
+	profile: Profile;
+	onEditProfile: () => void;
 }) {
 	const t = useT();
 	const legs = options.flatMap((o) => o.legs ?? []);
@@ -1934,8 +1985,30 @@ function TripConditions({
 	);
 	const fromRiders = [...trouble.values()].filter((d) => d.source === "riders");
 	return (
-		<section className="trip-conditions" aria-label={t("Conditions now")}>
-			<h3>{t("Conditions now · what your ranking is based on")}</h3>
+		<details className="trip-conditions">
+			<summary>
+				<Sparkles size={15} />
+				<span>
+					<strong>{t("Why these options?")}</strong>
+					<small>{t(`Ranked for ${persona(profile)}`)}</small>
+				</span>
+				<ChevronDown size={16} className="trip-conditions-chevron" />
+			</summary>
+			<h3>{t("From your answers")}</h3>
+			<ul className="trip-reasons">
+				{profileReasons(profile).map((reason) => (
+					<li key={reason}>{t(reason)}</li>
+				))}
+			</ul>
+			<button
+				type="button"
+				className="trip-reasons-edit"
+				onClick={onEditProfile}
+			>
+				<Pencil size={13} />
+				{t("Edit my answers")}
+			</button>
+			<h3>{t("Conditions right now")}</h3>
 			<dl>
 				<div>
 					<dt>
@@ -1966,7 +2039,7 @@ function TripConditions({
 						{t(" Crowding ")}
 					</dt>
 					<dd>
-						{crowd ? crowdLabel(crowd.value) : "—"}
+						{crowd ? <CrowdingIcon value={crowd.value} size={22} /> : "—"}
 						<small>
 							{crowd?.source === "riders"
 								? `Reported by ${crowd.reports} rider${crowd.reports === 1 ? "" : "s"} on your bus`
@@ -2007,18 +2080,7 @@ function TripConditions({
 					</dd>
 				</div>
 			</dl>
-			<p className="trip-conditions-weights">
-				{t(" Your weights: walking α ")}
-				{weights.alpha}
-				{t(" · waiting β ")}
-				{weights.beta}
-				{t(" · change γ ")}
-				{weights.gamma}
-				{t(" min · crowding δ ")}
-				{weights.delta}
-				{t(" · delay η")} {weights.eta}
-			</p>
-		</section>
+		</details>
 	);
 }
 
