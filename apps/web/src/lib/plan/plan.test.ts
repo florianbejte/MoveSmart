@@ -657,4 +657,17 @@ test("trip companion: when to leave, board, change and get off, following live d
 	assert.equal(at(42).key, "done");
 	// The first bus now reports 4 min late: still time to wait at home.
 	assert.equal(at(10, 240).key, "wait");
+	// Planned far ahead: a clock time, not hundreds of minutes.
+	assert.match(
+		companionStep(legs, NOW - 5 * 3600_000, () => null, 5).title,
+		/^Leave at \d\d:\d\d$/,
+	);
+	// Park & Ride: drive first, then walk to the stop.
+	const pr = (m: number) =>
+		companionStep(legs, NOW + m * 60_000, () => null, 12, {
+			lot: "Sėlių g. 62",
+			minutes: 8,
+		});
+	assert.equal(pr(3).key, "drive");
+	assert.equal(pr(11).key, "walk");
 });

@@ -914,8 +914,28 @@ export const lithuanian: Record<string, string> = {
 	"signal may be lost": "galbūt dingo ryšys",
 	"Live location not shared yet — showing the planned route and the bus.":
 		"Vieta dar nebendrinama — rodomas suplanuotas maršrutas ir autobusas.",
+	"No buses or trolleybuses run in the next 90 minutes — night service is limited. Try a later time, a taxi or a shared vehicle.":
+		"Artimiausias 90 minučių autobusai ir troleibusai nevažiuoja — naktį eismas ribotas. Pasirinkite vėlesnį laiką, taksi ar dalijamąją transporto priemonę.",
+	"Buses run here, but every option is over your walking limit. See “Not suggested for you”, or allow a longer walk in Trip options.":
+		"Autobusai čia važiuoja, bet visi variantai viršija jūsų ėjimo ribą. Žr. „Jums nesiūloma“ arba leiskite ilgesnį ėjimą kelionės nuostatose.",
+	"across 1 green trip": "per 1 žalią kelionę",
+	"Sheltered from the rain": "Apsaugota nuo lietaus",
+	"Sheltered from the heavy rain": "Apsaugota nuo liūties",
+	"Sheltered from slippery pavements": "Apsaugota nuo slidžių šaligatvių",
+	"Sheltered from the cold": "Apsaugota nuo šalčio",
+	"Sheltered from the wind": "Apsaugota nuo vėjo",
+	"Sheltered from the bad weather": "Apsaugota nuo blogo oro",
 };
 export const templates: Record<string, string> = {
+	"Nothing gets you there by {0} any more. Try a later time.":
+		"Iki {0} jau niekaip nespėsite. Pasirinkite vėlesnį laiką.",
+	"across {0} green trips": "per {0} žalias keliones",
+	"Drive to the Park & Ride at {0}":
+		"Važiuokite į „Statyk ir važiuok“ aikštelę {0}",
+	"Park there, then bus {0} leaves {1} at {2}.":
+		"Palikite automobilį — autobusas {0} išvyksta iš stotelės {1} {2}.",
+	"Trouble on the way · about +{0} min, already in the time":
+		"Trikdžiai pakeliui · apie +{0} min., jau įskaičiuota į laiką",
 	"Drive {0} km (~{1} min) to the Park & Ride lot at {2} and park for free":
 		"Nuvažiuokite {0} km (~{1} min.) iki „Statyk ir važiuok“ aikštelės {2} ir palikite automobilį nemokamai",
 	"{0} spaces": "{0} vietų",

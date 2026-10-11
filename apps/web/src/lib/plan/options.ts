@@ -664,7 +664,8 @@ export function rankOptions(
 				o.demoAccess && stepFree(profile) && !o.demoAccess.stepFree
 					? "Demo: boarding requires steps"
 					: exclusion(o, profile, icy),
-			green: GREEN_MODES.includes(o.mode),
+			// Park & Ride is mostly driving: never "green", never promoted, never logged as saved CO₂.
+			green: GREEN_MODES.includes(o.mode) && !o.via,
 			co2Saved: Math.max(0, driving - o.co2),
 		};
 	});
@@ -789,10 +790,27 @@ function explain(
 		(o.mode === "walk" || o.mode === "bike" || o.mode === "scooter")
 	)
 		reasons.push(`Outdoors in ${weather.join(", ")}`);
-	if (weather.length && ["car", "taxi", "carshare", "transit"].includes(o.mode))
-		reasons.push(`Sheltered from the ${weather[0]}`);
+	// Only when the trip really keeps the rider out of it: not a bus trip with a long walk.
+	const shelter = weather.find((w) => SHELTER_FROM[w.split(":")[0]]);
+	if (
+		shelter &&
+		["car", "taxi", "carshare", "transit"].includes(o.mode) &&
+		o.parts.walk <= 8
+	)
+		reasons.push(`Sheltered from ${SHELTER_FROM[shelter.split(":")[0]]}`);
 	return reasons;
 }
 
+/** Weather reasons as nouns, for "Sheltered from …". */
+const SHELTER_FROM: Record<string, string> = {
+	rain: "the rain",
+	"heavy rain": "the heavy rain",
+	slippery: "slippery pavements",
+	"very cold": "the cold",
+	"strong wind": "the wind",
+	"yellow warning": "the bad weather",
+	"orange warning": "the bad weather",
+	"red warning": "the bad weather",
+};
 export const kg = (grams: number) =>
 	grams >= 1000 ? `${(grams / 1000).toFixed(1)} kg` : `${Math.round(grams)} g`;

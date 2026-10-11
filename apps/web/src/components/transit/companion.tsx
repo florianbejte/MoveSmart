@@ -13,11 +13,13 @@ import type { Vehicle } from "@/lib/transit/types";
 export function TripCompanion({
 	legs,
 	walkMinutes,
+	drive,
 	vehicles,
 	now,
 }: {
 	legs: CompanionLeg[];
 	walkMinutes: number;
+	drive?: { lot: string; minutes: number };
 	vehicles: Vehicle[];
 	now: number;
 }) {
@@ -35,6 +37,7 @@ export function TripCompanion({
 		at,
 		(tripId) => delays.get(tripId) ?? null,
 		walkMinutes,
+		drive,
 	);
 	const [notify, setNotify] = useState(false);
 	const fired = useRef(new Set<string>());

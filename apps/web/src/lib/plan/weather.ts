@@ -2,26 +2,39 @@ import type { Weather } from "./options";
 
 const FORECAST_URL =
 	"https://api.meteo.lt/v1/places/vilnius/forecasts/long-term";
-let cached: { value: Weather | null; at: number } | undefined;
-
-/** The current hour from the LHMT (meteo.lt) Vilnius forecast, cached for 10 minutes. */
-export async function getWeather(): Promise<Weather | null> {
-	if (cached && Date.now() - cached.at < 10 * 60_000) return cached.value;
+const feeds = new Map<string, { json: unknown; at: number }>();
+/** Fetch a feed as JSON, cached for 10 minutes; a stale copy is used if the source fails. */
+async function feed(url: string) {
+	const hit = feeds.get(url);
+	if (hit && Date.now() - hit.at < 10 * 60_000) return hit.json;
 	try {
-		const response = await fetch(FORECAST_URL, {
+		const response = await fetch(url, {
 			headers: { "User-Agent": "MoveSmart/1.0" },
 			cache: "no-store",
 			signal: AbortSignal.timeout(10_000),
 		});
-		if (!response.ok) throw new Error(`Weather returned ${response.status}`);
-		const value = currentHour(await response.json(), Date.now());
-		if (value) value.warning = (await getWarning()) ?? undefined;
-		cached = { value, at: Date.now() };
-		return value;
+		if (!response.ok) throw new Error(`Feed returned ${response.status}`);
+		const json = await response.json();
+		feeds.set(url, { json, at: Date.now() });
+		return json;
 	} catch {
-		// Planning still works without weather; keep a stale value if there is one.
-		return cached?.value ?? null;
+		return hit?.json ?? null;
 	}
+}
+
+/**
+ * Weather for the hour of the trip from the LHMT (meteo.lt) Vilnius forecast, plus any
+ * official warning in force then. Planned trips get the forecast for when they happen.
+ */
+export async function getWeather(at = Date.now()): Promise<Weather | null> {
+	const [forecast, warnings] = await Promise.all([
+		feed(FORECAST_URL),
+		feed(WARNINGS_URL),
+	]);
+	const value = forecast ? currentHour(forecast, at) : null;
+	if (value && warnings)
+		value.warning = activeWarning(warnings, at) ?? undefined;
+	return value;
 }
 
 export function currentHour(json: unknown, now: number): Weather | null {
@@ -86,17 +99,4 @@ export function activeWarning(
 			worst = { level, event: en.event, until };
 	}
 	return worst;
-}
-async function getWarning() {
-	try {
-		const response = await fetch(WARNINGS_URL, {
-			headers: { "User-Agent": "MoveSmart/1.0" },
-			cache: "no-store",
-			signal: AbortSignal.timeout(8_000),
-		});
-		if (!response.ok) return null;
-		return activeWarning(await response.json(), Date.now());
-	} catch {
-		return null;
-	}
 }

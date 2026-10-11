@@ -366,6 +366,37 @@ export default function TransitExplorer() {
 		const vehicle = vehicles.find((v) => v.id === id);
 		if (vehicle) focusOn(vehicle);
 	}
+	// If location was allowed before, use it straight away (no prompt, no map jump), so trips
+	// start from where the rider is instead of the city centre.
+	useEffect(() => {
+		if (!navigator.geolocation || !navigator.permissions) return;
+		let cancelled = false;
+		navigator.permissions
+			.query({ name: "geolocation" })
+			.then((status) => {
+				if (cancelled || status.state !== "granted") return;
+				navigator.geolocation.getCurrentPosition(
+					(position) => {
+						const point = {
+							lat: position.coords.latitude,
+							lon: position.coords.longitude,
+						};
+						// Outside Vilnius the city centre is a more useful start.
+						if (
+							!cancelled &&
+							distance(point, { lat: 54.6872, lon: 25.2797 }) <= 60_000
+						)
+							setLocation((current) => current ?? point);
+					},
+					() => {},
+					{ enableHighAccuracy: false, timeout: 10_000, maximumAge: 120_000 },
+				);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 	function locate() {
 		setSheet("half");
 		setCityOpen(false);

@@ -32,6 +32,8 @@ export function companionStep(
 	/** Current live delay (seconds) per trip, when the bus reports one. */
 	liveDelay: (tripId: string) => number | null,
 	walkToFirstStopMinutes: number,
+	/** Park & Ride: drive to this lot first (its minutes are part of walkToFirstStopMinutes). */
+	drive?: { lot: string; minutes: number },
 ): CompanionStep {
 	const shifted = legs.map((leg) => {
 		const delay = liveDelay(leg.tripId);
@@ -49,9 +51,21 @@ export function companionStep(
 		return {
 			key: "wait",
 			tone: "info",
-			title: `Leave in ${mins(leaveAt - now)} min`,
+			// Far-off trips read better as a clock time than as hundreds of minutes.
+			title:
+				leaveAt - now > 60 * 60_000
+					? `Leave at ${time.format(leaveAt)}`
+					: `Leave in ${mins(leaveAt - now)} min`,
 			detail: `Allow ${walkToFirstStopMinutes} min to get to ${first.fromStop}. Bus ${first.route} leaves at ${time.format(first.departAt)}${first.live ? " (live)" : ""}.`,
 			notify: false,
+		};
+	if (drive && now < leaveAt + drive.minutes * 60_000)
+		return {
+			key: "drive",
+			tone: "go",
+			title: `Drive to the Park & Ride at ${drive.lot}`,
+			detail: `Park there, then bus ${first.route} leaves ${first.fromStop} at ${time.format(first.departAt)}.`,
+			notify: true,
 		};
 	if (now < first.departAt - 2 * 60_000)
 		return {

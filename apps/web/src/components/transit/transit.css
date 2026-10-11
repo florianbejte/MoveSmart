@@ -3384,19 +3384,42 @@
 
 /* Compact labels stay legible in both Lithuanian and English on narrow phones. */
 /* biome-ignore lint/style/noDescendingSpecificity: planner panels are separate containers. */
-.journey-modes button { padding: 8px 2px; min-height: 58px; line-height: 1.25; }
+.journey-modes button {
+	padding: 8px 2px;
+	min-height: 58px;
+	line-height: 1.25;
+}
 /* biome-ignore lint/style/noDescendingSpecificity: planner panels are separate containers. */
-.journey-modes button span { white-space: nowrap; }
-.plan-point > button:not(.point-edit) { flex-shrink: 0; }
+.journey-modes button span {
+	white-space: nowrap;
+}
+.plan-point > button:not(.point-edit) {
+	flex-shrink: 0;
+}
 /* biome-ignore lint/style/noDescendingSpecificity: planner panels are separate containers. */
-.plan-search svg { flex-shrink: 0; }
+.plan-search svg {
+	flex-shrink: 0;
+}
 /* biome-ignore lint/style/noDescendingSpecificity: planner panels are separate containers. */
-.journey-settings summary > span { white-space: nowrap; }
+.journey-settings summary > span {
+	white-space: nowrap;
+}
 @media (max-width: 380px) {
- .journey-modes { gap: 2px; padding: 3px; }
- .journey-modes button { font-size: 10px; }
- .journey-settings summary { gap: 8px; font-size: 11px; }
- .transit-app[data-view="plan"] .explorer-heading h1 { font-size: 23px; line-height: 1.2; }
+	.journey-modes {
+		gap: 2px;
+		padding: 3px;
+	}
+	.journey-modes button {
+		font-size: 10px;
+	}
+	.journey-settings summary {
+		gap: 8px;
+		font-size: 11px;
+	}
+	.transit-app[data-view="plan"] .explorer-heading h1 {
+		font-size: 23px;
+		line-height: 1.2;
+	}
 }
 .weather-warning-chip {
 	display: inline-block;

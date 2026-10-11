@@ -317,9 +317,15 @@ export function TripPlanner({
 			: when.mode === "arrive"
 				? when.at - Math.round(tripKm * 4 + 30) * 60_000
 				: null;
+	// Only a future time goes in the URL: a past one means "now" on the server, and keeping
+	// Date.now() out of the URL stops the plan being refetched on every render.
+	const fetchAt =
+		searchAt && searchAt > Date.now() + 60_000
+			? Math.round(searchAt / 60_000) * 60_000
+			: null;
 	const planUrl =
 		to && !hidden
-			? `/api/plan?from=${from.lat},${from.lon}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}&pace=${walkPace(profile)}&walk=${maxWalk}${profile.hasCar ? "&car=1" : ""}${searchAt ? `&at=${Math.max(Date.now(), searchAt)}` : ""}`
+			? `/api/plan?from=${from.lat},${from.lon}&to=${to.lat.toFixed(5)},${to.lon.toFixed(5)}&pace=${walkPace(profile)}&walk=${maxWalk}${profile.hasCar ? "&car=1" : ""}${fetchAt ? `&at=${fetchAt}` : ""}`
 			: null;
 	const plan = useTransit<PlanResponse>(planUrl, 60_000);
 	const conditions = useTransit<{
@@ -349,8 +355,34 @@ export function TripPlanner({
 			routeName: (id) => routes.get(id)?.name ?? "",
 			profile,
 		});
+		const impact = tripImpact(
+			{ from: start, to },
+			options,
+			disruptions,
+			// Closures and reports that will be in force when the trip actually happens.
+			planNow,
+			(id) => stops.find((s) => s.id === id),
+			(id) => routes.get(id)?.name ?? "",
+		);
+		// Expected disruption delay is part of the trip: it moves the arrival time too.
+		options = options.map((o) => {
+			const hit = impact.options.get(o.id);
+			if (!hit) return o;
+			return {
+				...o,
+				minutes: o.minutes + hit.minutes,
+				arriveAt: o.arriveAt + hit.minutes * 60_000,
+				disruption: {
+					minutes: hit.minutes,
+					titles: hit.found.map(
+						(d) => `${DISRUPTION_INFO[d.kind].label}: ${d.title}`,
+					),
+				},
+			};
+		});
 		if (when.mode === "arrive")
-			// Only trips that make the deadline; other modes leave just in time to arrive at it.
+			// Only trips that make the deadline; other modes leave just in time to arrive at it,
+			// unless that leave time has already passed.
 			options = options
 				.filter((o) => o.mode !== "transit" || o.arriveAt <= when.at)
 				.map((o) =>
@@ -361,25 +393,8 @@ export function TripPlanner({
 								departAt: when.at - o.minutes * 60_000,
 								arriveAt: when.at,
 							},
-				);
-		const impact = tripImpact(
-			{ from: start, to },
-			options,
-			disruptions,
-			plan.data.generatedAt,
-			(id) => stops.find((s) => s.id === id),
-			(id) => routes.get(id)?.name ?? "",
-		);
-		for (const o of options) {
-			const hit = impact.options.get(o.id);
-			if (hit)
-				o.disruption = {
-					minutes: hit.minutes,
-					titles: hit.found.map(
-						(d) => `${DISRUPTION_INFO[d.kind].label}: ${d.title}`,
-					),
-				};
-		}
+				)
+				.filter((o) => o.departAt >= Date.now() - 60_000);
 		return {
 			ranked: rankOptions(
 				strollerDemo
@@ -429,7 +444,32 @@ export function TripPlanner({
 	const weights = weightsFor(profile, weather);
 
 	const tooClose = to && distance(start, to) < 150;
-	const selected = usable.find((o) => o.id === going);
+	// Why no buses are shown, so the advice actually helps.
+	const searchHour = Number(
+		new Intl.DateTimeFormat("en-GB", {
+			timeZone: "Europe/Vilnius",
+			hour: "numeric",
+			hourCycle: "h23",
+		}).format(fetchAt ?? Date.now()),
+	);
+	const noBusAdvice = !plan.data
+		? null
+		: !plan.data.rides.length && !plan.data.transfers?.length
+			? searchHour < 5
+				? "No buses or trolleybuses run in the next 90 minutes — night service is limited. Try a later time, a taxi or a shared vehicle."
+				: "No direct or one-change bus journey found within this walking budget. Try allowing a longer walk."
+			: !usable.some((o) => o.mode === "transit") &&
+					ranked.some((o) => o.mode === "transit" && o.excluded)
+				? "Buses run here, but every option is over your walking limit. See “Not suggested for you”, or allow a longer walk in Trip options."
+				: null;
+	// Once the rider has set off, a refresh may no longer list their bus (it has departed):
+	// keep showing the option they chose instead of dropping back to the list.
+	const [chosenSnapshot, setChosenSnapshot] = useState<RankedOption | null>(
+		null,
+	);
+	const selected =
+		usable.find((o) => o.id === going) ??
+		(going && chosenSnapshot?.id === going ? chosenSnapshot : undefined);
 	const stage = selected && !hidden ? "map" : "choose";
 	// biome-ignore lint/correctness/useExhaustiveDependencies: onStage is a stable state setter.
 	useEffect(() => onStage(stage), [stage]);
@@ -739,10 +779,12 @@ export function TripPlanner({
 					{account.impact.trips > 0 ? (
 						<span>
 							{t("You’ve saved ")}
-							<strong>{t(kg(account.impact.grams))} CO₂</strong>
-							{t(" in")}
-							{t(" ")}
-							{t(`Green trips: ${account.impact.trips}`)}
+							<strong>{t(kg(account.impact.grams))} CO₂</strong>{" "}
+							{t(
+								account.impact.trips === 1
+									? "across 1 green trip"
+									: `across ${account.impact.trips} green trips`,
+							)}
 						</span>
 					) : (
 						<span>
@@ -788,16 +830,9 @@ export function TripPlanner({
 					)}
 				</p>
 			)}
-			{to &&
-				plan.data &&
-				!plan.data.rides.length &&
-				!plan.data.transfers?.length && (
-					<p className="helper-text">
-						{t(
-							"No direct or one-change bus journey found within this walking budget. Try allowing a longer walk.",
-						)}
-					</p>
-				)}
+			{to && plan.data && noBusAdvice && (
+				<p className="helper-text">{t(noBusAdvice)}</p>
+			)}
 			{editingFrom && (
 				<div className="plan-suggestions">
 					<button type="button" onClick={() => chooseFrom(null)}>
@@ -870,6 +905,7 @@ export function TripPlanner({
 					)}
 					{selected && to && (
 						<LiveShare
+							tripKey={`${selected.id}|${pt(start)}|${pt(to)}`}
 							option={selected}
 							from={
 								fromPlace ?? {
@@ -913,6 +949,14 @@ export function TripPlanner({
 										(selected.legs[0].walkToMetres * 1.25) / walkPace(profile),
 									))
 							}
+							drive={
+								selected.via
+									? {
+											lot: selected.via.name,
+											minutes: selected.via.driveMinutes,
+										}
+									: undefined
+							}
 							vehicles={vehicles}
 							now={now}
 						/>
@@ -937,9 +981,13 @@ export function TripPlanner({
 					)}
 					{!selected && !filteredOptions.length && (
 						<p className="notice">
-							{t(
-								"No journeys match these options. Try another mode or adjust Trip options.",
-							)}
+							{when.mode === "arrive" && !usable.length
+								? t(
+										`Nothing gets you there by ${dayTime(when.at)} any more. Try a later time.`,
+									)
+								: t(
+										"No journeys match these options. Try another mode or adjust Trip options.",
+									)}
 						</p>
 					)}
 					{!selected && usable.length > 0 && (
@@ -954,7 +1002,8 @@ export function TripPlanner({
 							<OptionCard
 								key={o.id}
 								option={o}
-								best={i === 0 && !selected}
+								// The badge marks the overall best option, not just the first in the chosen filter.
+								best={o.id === usable[0]?.id && !selected}
 								now={now}
 								routeColor={
 									o.ride && (o.legs?.length ?? 1) === 1
@@ -976,10 +1025,12 @@ export function TripPlanner({
 								)}
 								routes={routes}
 								going={o.id === selected?.id}
+								hasPass={profile.hasPass}
 								weights={weights}
-								runnerUp={i === 0 ? usable[1] : usable[0]}
+								runnerUp={o.id === usable[0]?.id ? usable[1] : usable[0]}
 								onGo={() => {
 									setGoing(o.id);
+									setChosenSnapshot(o);
 									if (o.green) account.logGreenTrip(o.mode, o.co2Saved);
 								}}
 								trip={{ from: start, to }}
@@ -1032,7 +1083,10 @@ export function TripPlanner({
 						places={[
 							{ label: `Near ${to.name}`, at: to },
 							{
-								label: usingLocation ? "Where I am now" : "Where I start",
+								label:
+									usingLocation && !fromPlace
+										? "Where I am now"
+										: "Where I start",
 								at: start,
 							},
 						]}
@@ -1059,6 +1113,7 @@ function OptionCard({
 	legs,
 	routes,
 	going,
+	hasPass,
 	weights,
 	runnerUp,
 	onGo,
@@ -1071,6 +1126,7 @@ function OptionCard({
 	legs?: NamedRide[];
 	routes: Map<string, TransitRoute>;
 	going: boolean;
+	hasPass: boolean;
 	weights: Weights;
 
 	runnerUp?: RankedOption;
@@ -1301,9 +1357,9 @@ function OptionCard({
 					<TriangleAlert size={14} />
 					<span>
 						<strong>
-							{t(" Trouble on the way · about +")}
-							{o.disruption.minutes}
-							{t(" min ")}
+							{t(
+								`Trouble on the way · about +${o.disruption.minutes} min, already in the time`,
+							)}
 						</strong>
 						{o.disruption.titles.slice(0, 3).map((t) => (
 							<small key={t}>{t}</small>
@@ -1330,7 +1386,7 @@ function OptionCard({
 					)}
 				</p>
 			)}
-			{going && o.mode === "transit" && o.cost > 0 && (
+			{going && o.mode === "transit" && !hasPass && (
 				<TicketInfo
 					price={
 						o.legs?.length
@@ -2036,9 +2092,11 @@ function WhenPicker({
 						onClick={() =>
 							onChange({
 								mode,
+								// A deadline needs room for the trip itself: default to an hour ahead.
 								at: Math.max(
 									when.at,
-									Math.ceil(Date.now() / 300_000) * 300_000 + 900_000,
+									Math.ceil(Date.now() / 300_000) * 300_000 +
+										(mode === "arrive" ? 60 : 15) * 60_000,
 								),
 							})
 						}
@@ -2103,7 +2161,13 @@ function simplify(coords: [number, number][]) {
 	return coords.filter((_, i) => i % step === 0 || i === coords.length - 1);
 }
 
-type ActiveShare = { shareId: string; writeKey: string; url: string };
+type ActiveShare = {
+	shareId: string;
+	writeKey: string;
+	url: string;
+	/** The trip this share belongs to (option, start and destination). */
+	trip: string;
+};
 const SHARE_KEY = "movesmart-live-share";
 
 /**
@@ -2111,6 +2175,7 @@ const SHARE_KEY = "movesmart-live-share";
  * now, until you arrive or stop. Falls back to a route-only link without a backend.
  */
 function LiveShare({
+	tripKey,
 	option,
 	from,
 	to,
@@ -2118,6 +2183,7 @@ function LiveShare({
 	path,
 	legs,
 }: {
+	tripKey: string;
 	option: RankedOption;
 	from: Place;
 	to: Place;
@@ -2131,13 +2197,24 @@ function LiveShare({
 	const [share, setShare] = useState<ActiveShare | null>(null);
 	const [note, setNote] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
-	// Resume a share after a reload in the same tab.
+	// Resume this trip's share after a reload; a share left over from a different trip is
+	// stopped, so friends never keep watching an old route.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: check once per trip.
 	useEffect(() => {
+		let saved: ActiveShare | null = null;
 		try {
-			const saved = sessionStorage.getItem(SHARE_KEY);
-			if (saved) setShare(JSON.parse(saved));
+			saved = JSON.parse(sessionStorage.getItem(SHARE_KEY) ?? "null");
 		} catch {}
-	}, []);
+		if (!saved) return;
+		if (saved.trip === tripKey) setShare(saved);
+		else {
+			void account.liveShare.stop(saved).catch(() => {});
+			try {
+				sessionStorage.removeItem(SHARE_KEY);
+			} catch {}
+			setShare(null);
+		}
+	}, [tripKey]);
 	// Send the position while sharing; the page must stay open (no background tracking).
 	useEffect(() => {
 		if (!share || !navigator.geolocation) return;
@@ -2219,6 +2296,7 @@ function LiveShare({
 		const active = {
 			...created,
 			url: `${window.location.origin}/trip/${created.shareId}`,
+			trip: tripKey,
 		};
 		try {
 			sessionStorage.setItem(SHARE_KEY, JSON.stringify(active));

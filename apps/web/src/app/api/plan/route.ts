@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 		// Conditions load independently so a slow ArcGIS feed cannot hold up routes.
 		if (params.get("part") === "conditions") {
 			const [weather, disruptions] = await Promise.all([
-				getWeather(),
+				getWeather(at),
 				officialDisruptions(from, to).catch(() => []),
 			]);
 			return Response.json(
