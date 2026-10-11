@@ -3809,3 +3809,72 @@
 	font-weight: 800;
 	cursor: pointer;
 }
+/* Compact planner controls: one-line mode tabs and a slim "Why these options?" row. */
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.journey-modes {
+	margin: 10px 0 12px;
+	padding: 3px;
+	gap: 3px;
+	border-radius: 12px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.journey-modes button {
+	flex-direction: row;
+	gap: 5px;
+	min-height: 36px;
+	padding: 0 4px;
+	border-radius: 9px;
+	font-size: 12px;
+}
+@media (max-width: 420px) {
+	/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+	.journey-modes button {
+		flex-direction: column;
+		gap: 1px;
+		min-height: 40px;
+		font-size: 10px;
+	}
+}
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.trip-conditions {
+	margin: 0 0 12px;
+	padding: 0 10px;
+	border-radius: 10px 10px 0 10px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.trip-conditions:not([open]) {
+	padding-block: 0;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.trip-conditions[open] {
+	padding-bottom: 10px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.trip-conditions summary {
+	min-height: 38px;
+	gap: 7px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.trip-conditions summary span {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	overflow: hidden;
+	white-space: nowrap;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.trip-conditions summary strong {
+	font-size: 12px;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.trip-conditions summary small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* biome-ignore lint/style/noDescendingSpecificity: compact overrides for planner panels. */
+.trip-conditions summary small::before {
+	content: "· ";
+}
+.trip-conditions[open] summary {
+	margin-bottom: 2px;
+}

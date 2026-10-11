@@ -815,7 +815,7 @@ export function TripPlanner({
 							setGoing(null);
 						}}
 					>
-						<ModeIcon size={17} />
+						<ModeIcon size={15} />
 						<span>
 							{t(
 								id === "transit" ? "Buses" : id === "drive" ? "By car" : label,
@@ -991,13 +991,6 @@ export function TripPlanner({
 								: t(
 										"No journeys match these options. Try another mode or adjust Trip options.",
 									)}
-						</p>
-					)}
-					{!selected && usable.length > 0 && (
-						<p className="formula-lead">
-							{t(
-								" Ranked for your needs and answers — with greener ways first. ",
-							)}
 						</p>
 					)}
 					<ol className="plan-options">
@@ -1987,12 +1980,12 @@ function TripConditions({
 	return (
 		<details className="trip-conditions">
 			<summary>
-				<Sparkles size={15} />
+				<Sparkles size={14} />
 				<span>
 					<strong>{t("Why these options?")}</strong>
-					<small>{t(`Ranked for ${persona(profile)}`)}</small>
+					<small>{t(persona(profile))}</small>
 				</span>
-				<ChevronDown size={16} className="trip-conditions-chevron" />
+				<ChevronDown size={15} className="trip-conditions-chevron" />
 			</summary>
 			<h3>{t("From your answers")}</h3>
 			<ul className="trip-reasons">
