@@ -1,5 +1,6 @@
 import { distance } from "../transit/core";
 import type { Position } from "../transit/types";
+import type { DemoAccess } from "./demo";
 import { type Profile, stepFree, walkPace } from "./profile";
 import { type Quote, quote } from "./providers";
 import type { TransferTrip, TransitRide } from "./transit";
@@ -27,6 +28,7 @@ export type Weather = {
 };
 export type TripOption = {
 	id: string;
+	demoAccess?: DemoAccess;
 	mode: Mode;
 	label: string;
 	minutes: number;
@@ -66,7 +68,8 @@ export type Term = {
 		| "delay"
 		| "cost"
 		| "co2"
-		| "city";
+		| "city"
+		| "accessibility";
 	symbol: string;
 	label: string;
 	minutes: number;
@@ -512,8 +515,9 @@ export function costTerms(o: TripOption, profile: Profile, k: Weights): Term[] {
 		o.mode === "transit" ? (o.estimated ? 1 : Math.max(0, legs.length - 1)) : 0;
 	// Q averaged over riding time; D summed over buses. Cars face traffic instead.
 	const rideMs = legs.reduce((s, l) => s + (l.arriveAt - l.departAt), 0) || 1;
-	const q =
-		o.mode === "transit"
+	const q = o.demoAccess
+		? o.demoAccess.occupancy / 100
+		: o.mode === "transit"
 			? legs.length
 				? legs.reduce(
 						(s, l) =>
@@ -532,11 +536,13 @@ export function costTerms(o: TripOption, profile: Profile, k: Weights): Term[] {
 					? 4
 					: 1.5
 				: 0;
-	const qSource = legs.find((l) => l.crowding?.source === "riders")
-		? "rider reports"
-		: legs.find((l) => l.crowding?.source === "route")
-			? "reports on this route"
-			: "typical load now";
+	const qSource = o.demoAccess
+		? "demo occupancy"
+		: legs.find((l) => l.crowding?.source === "riders")
+			? "rider reports"
+			: legs.find((l) => l.crowding?.source === "route")
+				? "reports on this route"
+				: "typical load now";
 	const learned = legs.find((l) => l.expectedDelay?.source === "learned");
 	const trouble = o.disruption?.minutes ?? 0;
 	const terms: Term[] = [
@@ -634,6 +640,16 @@ export function rankOptions(
 		0;
 	const ranked = options.map((o): RankedOption => {
 		const terms = costTerms(o, profile, k);
+		if (o.demoAccess && stepFree(profile))
+			terms.push({
+				id: "accessibility",
+				symbol: "A",
+				label: "Demo boarding comfort",
+				minutes: o.demoAccess.strollerSpace ? 0 : 25,
+				detail: o.demoAccess.strollerSpace
+					? "Demo: stroller space available"
+					: "Demo: no stroller space",
+			});
 		return {
 			...o,
 			terms,
@@ -644,7 +660,10 @@ export function rankOptions(
 					.reduce((s, t) => s + t.minutes, 0),
 			),
 			reasons: [],
-			excluded: exclusion(o, profile, icy),
+			excluded:
+				o.demoAccess && stepFree(profile) && !o.demoAccess.stepFree
+					? "Demo: boarding requires steps"
+					: exclusion(o, profile, icy),
 			green: GREEN_MODES.includes(o.mode),
 			co2Saved: Math.max(0, driving - o.co2),
 		};

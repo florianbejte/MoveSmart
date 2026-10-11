@@ -20,6 +20,7 @@ const COLORS: Record<Term["id"], string> = {
 	cost: "#bdd947",
 	co2: "#6b6b6b",
 	city: "#c3c3c3",
+	accessibility: "#008000",
 };
 
 /** "How we ranked this": the rider's own C_u(r) with their weights and every term's numbers. */

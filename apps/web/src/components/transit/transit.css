@@ -3686,3 +3686,11 @@
 		box-shadow: 0 0 0 9px #ed1c2400;
 	}
 }
+
+.demo-preferences { margin-top: 12px; padding: 12px; border-radius: 12px; background: #f0f5e8; }
+.demo-preferences label { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 12px; font-weight: 650; cursor: pointer; }
+.demo-preferences input { accent-color: #008000; width: 18px; height: 18px; flex-shrink: 0; }
+.demo-preferences small { margin-left: auto; font-size: 10px; color: #426329; }
+.demo-preferences p { font-size: 11px; line-height: 1.5; margin: 8px 0 0; }
+.demo-suitability { display: flex; flex-wrap: wrap; gap: 5px 8px; padding: 8px 0; font-size: 11px; color: #45602f; line-height: 1.4; }
+.demo-suitability strong { background: #edf3df; border-radius: 5px; padding: 1px 5px; }

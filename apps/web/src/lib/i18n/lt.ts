@@ -1,4 +1,15 @@
 export const lithuanian: Record<string, string> = {
+	"Try stroller demo": "Išbandyti kelionę su vežimėliu",
+	Demo: "Demonstracija",
+	"Demo boarding comfort": "Įlipimo patogumas (demonstracija)",
+	"demo occupancy": "demonstracinis užimtumas",
+	"Demo: step-free boarding": "Demonstracija: įlipimas be laiptelių",
+	"Demo: boarding requires steps": "Demonstracija: įlipimas su laipteliais",
+	"Demo: stroller space available": "Demonstracija: yra vietos vežimėliui",
+	"Demo: no stroller space": "Demonstracija: nėra vietos vežimėliui",
+	"Simulated bus occupancy and boarding access. Favours room for a stroller, fewer changes and shorter walks. Not verified accessibility data.":
+		"Imituojamas autobusų užimtumas ir įlipimas. Pirmenybė teikiama vietai vežimėliui, mažiau persėdimų ir trumpesniam ėjimui. Tai nėra patikrinti prieinamumo duomenys.",
+
 	"City centre": "Miesto centras",
 	"Where to?": "Kur vyksite?",
 	Options: "Nuostatos",
@@ -948,6 +959,7 @@ export const templates: Record<string, string> = {
 	"Follow {0}": "Sekti: {0}",
 	"Location updated {0} s ago": "Vieta atnaujinta prieš {0} s",
 	"Location updated {0} min ago": "Vieta atnaujinta prieš {0} min.",
+	"Bus occupancy: {0}%": "Autobuso užimtumas: {0}%",
 	"Area: {0} m²": "Plotas: {0} m²",
 	"Save route {0}": "Išsaugoti maršrutą {0}",
 	"Saved route {0}": "Išsaugotas maršrutas {0}",

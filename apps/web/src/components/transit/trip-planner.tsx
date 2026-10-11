@@ -33,6 +33,7 @@ import {
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { dateLocale, placeKindLabel } from "@/lib/i18n/core";
 import { useT } from "@/lib/i18n/react";
+import { withDemoAccess } from "@/lib/plan/demo";
 import {
 	DISRUPTION_INFO,
 	type Disruption,
@@ -174,7 +175,7 @@ export function TripPlanner({
 	usingLocation,
 	locating,
 	onLocate,
-	profile,
+	profile: savedProfile,
 	places,
 	onPlace,
 	onPath,
@@ -201,6 +202,17 @@ export function TripPlanner({
 }) {
 	const t = useT();
 
+	const [strollerDemo, setStrollerDemo] = useState(false);
+	const profile = useMemo(
+		() =>
+			strollerDemo
+				? {
+						...savedProfile,
+						needs: [...new Set([...savedProfile.needs, "stroller" as const])],
+					}
+				: savedProfile,
+		[savedProfile, strollerDemo],
+	);
 	const account = useAccount();
 	const [query, setQuery] = useState("");
 	const [to, setTo] = useState<Place | null>(null);
@@ -369,13 +381,20 @@ export function TripPlanner({
 				};
 		}
 		return {
-			ranked: rankOptions(options, profile, conditions.data?.weather ?? null),
+			ranked: rankOptions(
+				strollerDemo
+					? withDemoAccess(options, (id) => routes.get(id)?.name ?? id)
+					: options,
+				profile,
+				conditions.data?.weather ?? null,
+			),
 			impact,
 		};
 	}, [
 		to,
 		plan.data,
 		conditions.data,
+		strollerDemo,
 		profile,
 		start,
 		routes,
@@ -647,6 +666,27 @@ export function TripPlanner({
 					setGoing(null);
 				}}
 			/>
+			<div className="demo-preferences">
+				<label>
+					<input
+						type="checkbox"
+						checked={strollerDemo}
+						onChange={(e) => {
+							setStrollerDemo(e.target.checked);
+							setGoing(null);
+						}}
+					/>
+					<span>{t("Try stroller demo")}</span>
+					<small>{t("Demo")}</small>
+				</label>
+				{strollerDemo && (
+					<p>
+						{t(
+							"Simulated bus occupancy and boarding access. Favours room for a stroller, fewer changes and shorter walks. Not verified accessibility data.",
+						)}
+					</p>
+				)}
+			</div>
 			<details className="journey-settings">
 				<summary>
 					{t("Options")}
@@ -1110,6 +1150,7 @@ function OptionCard({
 							</>
 						)}
 					</div>
+					{o.demoAccess && <DemoSuitability option={o} />}
 					<div className="journey-summary-bottom">
 						<span>
 							{ride ? (
@@ -1197,6 +1238,7 @@ function OptionCard({
 					</small>
 				</span>
 			</div>
+			{o.demoAccess && <DemoSuitability option={o} />}
 			<div className="plan-facts">
 				{o.mode === "transit" && !o.estimated && (
 					<span className={ride?.live ? "live" : ""}>
@@ -2273,5 +2315,31 @@ function LiveShare({
 			)}
 			{note && !share && <p className="helper-text">{note}</p>}
 		</div>
+	);
+}
+
+function DemoSuitability({ option }: { option: RankedOption }) {
+	const t = useT();
+	const data = option.demoAccess;
+	if (!data) return null;
+	return (
+		<span className="demo-suitability">
+			<strong>{t("Demo")}</strong>
+			<span>{t(`Bus occupancy: ${data.occupancy}%`)}</span>
+			<span>
+				{t(
+					data.stepFree
+						? "Demo: step-free boarding"
+						: "Demo: boarding requires steps",
+				)}
+			</span>
+			<span>
+				{t(
+					data.strollerSpace
+						? "Demo: stroller space available"
+						: "Demo: no stroller space",
+				)}
+			</span>
+		</span>
 	);
 }
